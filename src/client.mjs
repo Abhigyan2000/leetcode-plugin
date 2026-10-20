@@ -22,7 +22,7 @@ export class LeetCodeClient {
   async request(path, { method = 'GET', body, credentials, mutation = false, referer = '/' } = {}) {
     if (!path.startsWith('/') || path.startsWith('//')) throw new Error('Invalid API path');
     const headers = { Accept: 'application/json', Referer: ORIGIN + referer,
-      'User-Agent': 'LeetCodeCompanion/0.1.0 (community desktop plugin)' };
+      'User-Agent': 'LeetCodeCompanion/0.2.0 (community desktop plugin)' };
     if (body) headers['Content-Type'] = 'application/json';
     if (credentials?.session) {
       headers.Cookie = `LEETCODE_SESSION=${credentials.session}` + (credentials.csrf ? `; csrftoken=${credentials.csrf}` : '');
@@ -64,7 +64,7 @@ export class LeetCodeClient {
 
   async authStatus() {
     const credentials = await this.credentials();
-    if (!credentials.session) return { connected: false, source: credentials.source, reason: 'Run the local login script to connect your account.' };
+    if (!credentials.session) return { connected: false, source: credentials.source, reason: 'Use connect_account to open the LeetCode sign-in window.' };
     const { userStatus } = await this.graphql(STATUS, {}, credentials);
     return { connected: Boolean(userStatus?.isSignedIn && userStatus.username),
       username: userStatus?.isSignedIn ? userStatus.username : undefined,
@@ -73,10 +73,10 @@ export class LeetCodeClient {
 
   async authenticated(write = false) {
     const credentials = await this.credentials();
-    if (!credentials.session) throw new LeetCodeError('AUTH_REQUIRED', 'Connect your account using the local login script first.');
+    if (!credentials.session) throw new LeetCodeError('AUTH_REQUIRED', 'Use connect_account to sign in through the browser first.');
     if (write && !credentials.csrf) throw new LeetCodeError('CSRF_REQUIRED', 'Code execution and submission require your local csrftoken as well as LEETCODE_SESSION.');
     const { userStatus } = await this.graphql(STATUS, {}, credentials);
-    if (!userStatus?.isSignedIn || !userStatus.username) throw new LeetCodeError('SESSION_EXPIRED', 'Your LeetCode session has expired. Run local login again.');
+    if (!userStatus?.isSignedIn || !userStatus.username) throw new LeetCodeError('SESSION_EXPIRED', 'Your LeetCode session has expired. Use connect_account to sign in again.');
     return { credentials, username: userStatus.username };
   }
 

@@ -410,11 +410,11 @@ var require_codegen = __commonJS({
         const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
         return `${varKind} ${this.name}${rhs};` + _n;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         if (!names[this.name.str])
           return;
         if (this.rhs)
-          this.rhs = optimizeExpr(this.rhs, names, constants);
+          this.rhs = optimizeExpr(this.rhs, names, constants2);
         return this;
       }
       get names() {
@@ -431,10 +431,10 @@ var require_codegen = __commonJS({
       render({ _n }) {
         return `${this.lhs} = ${this.rhs};` + _n;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects)
           return;
-        this.rhs = optimizeExpr(this.rhs, names, constants);
+        this.rhs = optimizeExpr(this.rhs, names, constants2);
         return this;
       }
       get names() {
@@ -495,8 +495,8 @@ var require_codegen = __commonJS({
       optimizeNodes() {
         return `${this.code}` ? this : void 0;
       }
-      optimizeNames(names, constants) {
-        this.code = optimizeExpr(this.code, names, constants);
+      optimizeNames(names, constants2) {
+        this.code = optimizeExpr(this.code, names, constants2);
         return this;
       }
       get names() {
@@ -525,12 +525,12 @@ var require_codegen = __commonJS({
         }
         return nodes.length > 0 ? this : void 0;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         const { nodes } = this;
         let i = nodes.length;
         while (i--) {
           const n = nodes[i];
-          if (n.optimizeNames(names, constants))
+          if (n.optimizeNames(names, constants2))
             continue;
           subtractNames(names, n.names);
           nodes.splice(i, 1);
@@ -583,12 +583,12 @@ var require_codegen = __commonJS({
           return void 0;
         return this;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         var _a3;
-        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants);
-        if (!(super.optimizeNames(names, constants) || this.else))
+        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
+        if (!(super.optimizeNames(names, constants2) || this.else))
           return;
-        this.condition = optimizeExpr(this.condition, names, constants);
+        this.condition = optimizeExpr(this.condition, names, constants2);
         return this;
       }
       get names() {
@@ -611,10 +611,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.iteration})` + super.render(opts);
       }
-      optimizeNames(names, constants) {
-        if (!super.optimizeNames(names, constants))
+      optimizeNames(names, constants2) {
+        if (!super.optimizeNames(names, constants2))
           return;
-        this.iteration = optimizeExpr(this.iteration, names, constants);
+        this.iteration = optimizeExpr(this.iteration, names, constants2);
         return this;
       }
       get names() {
@@ -650,10 +650,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
       }
-      optimizeNames(names, constants) {
-        if (!super.optimizeNames(names, constants))
+      optimizeNames(names, constants2) {
+        if (!super.optimizeNames(names, constants2))
           return;
-        this.iterable = optimizeExpr(this.iterable, names, constants);
+        this.iterable = optimizeExpr(this.iterable, names, constants2);
         return this;
       }
       get names() {
@@ -695,11 +695,11 @@ var require_codegen = __commonJS({
         (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNodes();
         return this;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         var _a3, _b;
-        super.optimizeNames(names, constants);
-        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants);
-        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants);
+        super.optimizeNames(names, constants2);
+        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
+        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants2);
         return this;
       }
       get names() {
@@ -1000,7 +1000,7 @@ var require_codegen = __commonJS({
     function addExprNames(names, from) {
       return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
     }
-    function optimizeExpr(expr, names, constants) {
+    function optimizeExpr(expr, names, constants2) {
       if (expr instanceof code_1.Name)
         return replaceName(expr);
       if (!canOptimize(expr))
@@ -1015,14 +1015,14 @@ var require_codegen = __commonJS({
         return items;
       }, []));
       function replaceName(n) {
-        const c = constants[n.str];
+        const c = constants2[n.str];
         if (c === void 0 || names[n.str] !== 1)
           return n;
         delete names[n.str];
         return c;
       }
       function canOptimize(e) {
-        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants[c.str] !== void 0);
+        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants2[c.str] !== void 0);
       }
     }
     function subtractNames(names, from) {
@@ -2984,7 +2984,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve.call(this, root, ref);
+      let _sch = resolve2.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3011,7 +3011,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve(root, ref) {
+    function resolve2(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3875,7 +3875,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve(baseURI, relativeURI, options) {
+    function resolve2(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const {
         parsed: baseParsed,
@@ -3911,50 +3911,50 @@ var require_fast_uri = __commonJS({
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative, options, skipNormalization) {
+    function resolveComponent(base, relative2, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
         base = parse3(serialize(base, options), options);
-        relative = parse3(serialize(relative, options), options);
+        relative2 = parse3(serialize(relative2, options), options);
       }
       options = options || {};
-      if (!options.tolerant && relative.scheme) {
-        target.scheme = relative.scheme;
-        target.userinfo = relative.userinfo;
-        target.host = relative.host;
-        target.port = relative.port;
-        target.path = removeDotSegments(relative.path || "");
-        target.query = relative.query;
+      if (!options.tolerant && relative2.scheme) {
+        target.scheme = relative2.scheme;
+        target.userinfo = relative2.userinfo;
+        target.host = relative2.host;
+        target.port = relative2.port;
+        target.path = removeDotSegments(relative2.path || "");
+        target.query = relative2.query;
       } else {
-        if (relative.userinfo !== void 0 || relative.host !== void 0 || relative.port !== void 0) {
-          target.userinfo = relative.userinfo;
-          target.host = relative.host;
-          target.port = relative.port;
-          target.path = removeDotSegments(relative.path || "");
-          target.query = relative.query;
+        if (relative2.userinfo !== void 0 || relative2.host !== void 0 || relative2.port !== void 0) {
+          target.userinfo = relative2.userinfo;
+          target.host = relative2.host;
+          target.port = relative2.port;
+          target.path = removeDotSegments(relative2.path || "");
+          target.query = relative2.query;
         } else {
-          if (!relative.path) {
+          if (!relative2.path) {
             target.path = base.path;
-            if (relative.query !== void 0) {
-              target.query = relative.query;
+            if (relative2.query !== void 0) {
+              target.query = relative2.query;
             } else {
               target.query = base.query;
             }
           } else {
-            if (relative.path[0] === "/") {
-              target.path = removeDotSegments(relative.path);
+            if (relative2.path[0] === "/") {
+              target.path = removeDotSegments(relative2.path);
             } else {
               const baseHasAuthority = base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0;
               if (baseHasAuthority && !base.path) {
-                target.path = "/" + relative.path;
+                target.path = "/" + relative2.path;
               } else if (!base.path) {
-                target.path = relative.path;
+                target.path = relative2.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative.path;
+                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative2.path;
               }
               target.path = base.scheme === void 0 && !baseHasAuthority && target.path[0] !== "/" ? removeDotSegmentsRelative(target.path) : removeDotSegments(target.path);
             }
-            target.query = relative.query;
+            target.query = relative2.query;
           }
           target.userinfo = base.userinfo;
           target.host = base.host;
@@ -3962,7 +3962,7 @@ var require_fast_uri = __commonJS({
         }
         target.scheme = base.scheme;
       }
-      target.fragment = relative.fragment;
+      target.fragment = relative2.fragment;
       return target;
     }
     function equal(uriA, uriB, options) {
@@ -4266,7 +4266,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize,
-      resolve,
+      resolve: resolve2,
       resolveComponent,
       equal,
       serialize,
@@ -12897,8 +12897,8 @@ function emoji() {
 }
 var ipv4 = /^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$/;
 var ipv6 = /^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$/;
-var mac = (delimiter) => {
-  const escapedDelim = escapeRegex(delimiter ?? ":");
+var mac = (delimiter2) => {
+  const escapedDelim = escapeRegex(delimiter2 ?? ":");
   return new RegExp(`^(?:[0-9A-F]{2}${escapedDelim}){5}[0-9A-F]{2}$|^(?:[0-9a-f]{2}${escapedDelim}){5}[0-9a-f]{2}$`);
 };
 var cidrv4 = /^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\/([0-9]|[1-2][0-9]|3[0-2])$/;
@@ -15954,7 +15954,7 @@ var recursive = /* @__PURE__ */ new WeakMap();
 var NONE = 0;
 var ASSUMED = 1;
 var PROVEN = 2;
-function isRecursive(inst, stack, resolve) {
+function isRecursive(inst, stack, resolve2) {
   const cached2 = recursive.get(inst);
   if (cached2 !== void 0)
     return cached2 ? PROVEN : NONE;
@@ -15964,7 +15964,7 @@ function isRecursive(inst, stack, resolve) {
   let result = NONE;
   const check2 = (child) => {
     if (result !== PROVEN && child?._zod) {
-      const answer = isRecursive(child, stack, resolve);
+      const answer = isRecursive(child, stack, resolve2);
       if (answer > result)
         result = answer;
     }
@@ -15975,7 +15975,7 @@ function isRecursive(inst, stack, resolve) {
       const desc = Object.getOwnPropertyDescriptor(sh, key);
       if (spread && !desc.enumerable)
         continue;
-      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve) : NONE;
+      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve2) : NONE;
       if (child > answer)
         answer = child;
     }
@@ -16039,7 +16039,7 @@ function isRecursive(inst, stack, resolve) {
       break;
     // `$ZodLazy` caches its inner on the def, so a resolved edge is followed exactly
     case "lazy": {
-      const inner = def._cachedInner ?? (resolve ? inst._zod.innerType : void 0);
+      const inner = def._cachedInner ?? (resolve2 ? inst._zod.innerType : void 0);
       merge2(inner ? isRecursive(inner, stack, false) : ASSUMED);
       break;
     }
@@ -34477,7 +34477,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve) => setTimeout(resolve, pollInterval));
+        await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error62) {
@@ -34494,7 +34494,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve2, reject) => {
       const earlyReject = (error62) => {
         reject(error62);
       };
@@ -34572,7 +34572,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve(parseResult.data);
+            resolve2(parseResult.data);
           }
         } catch (error62) {
           reject(error62);
@@ -34834,12 +34834,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve2, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve, interval);
+      const timeoutId = setTimeout(resolve2, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -35970,7 +35970,7 @@ var McpServer = class {
     let task = createTaskResult.task;
     const pollInterval = task.pollInterval ?? 5e3;
     while (task.status !== "completed" && task.status !== "failed" && task.status !== "cancelled") {
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+      await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
       const updatedTask = await extra.taskStore.getTask(taskId);
       if (!updatedTask) {
         throw new McpError(ErrorCode.InternalError, `Task ${taskId} not found during polling`);
@@ -36634,12 +36634,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve) => {
+    return new Promise((resolve2) => {
       const json2 = serializeMessage(message);
       if (this._stdout.write(json2)) {
-        resolve();
+        resolve2();
       } else {
-        this._stdout.once("drain", resolve);
+        this._stdout.once("drain", resolve2);
       }
     });
   }
@@ -36649,6 +36649,7 @@ var StdioServerTransport = class {
 import { mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
+import { randomUUID } from "node:crypto";
 function credentialPath(env = process.env) {
   return env.LEETCODE_CREDENTIALS_FILE || join(
     env.LOCALAPPDATA || env.XDG_CONFIG_HOME || join(homedir(), ".config"),
@@ -36685,6 +36686,22 @@ async function loadCredentials(env = process.env) {
     throw new Error("The local credential file is invalid. Run local login again.");
   }
 }
+async function saveCredentials(value, env = process.env) {
+  const credentials = validateCredentials(value);
+  if (!credentials.csrf) throw new Error("Both session and csrftoken are required for local login.");
+  const path = credentialPath(env);
+  await mkdir(dirname(path), { recursive: true, mode: 448 });
+  const temporary = `${path}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, JSON.stringify(credentials), { mode: 384, flag: "wx" });
+    await rename(temporary, path);
+  } finally {
+    await rm(temporary, { force: true });
+  }
+}
+async function removeCredentials(env = process.env) {
+  await rm(credentialPath(env), { force: true });
+}
 
 // src/client.mjs
 var ORIGIN = "https://leetcode.com";
@@ -36712,7 +36729,7 @@ var LeetCodeClient = class {
     const headers = {
       Accept: "application/json",
       Referer: ORIGIN + referer,
-      "User-Agent": "LeetCodeCompanion/0.1.0 (community desktop plugin)"
+      "User-Agent": "LeetCodeCompanion/0.2.0 (community desktop plugin)"
     };
     if (body) headers["Content-Type"] = "application/json";
     if (credentials?.session) {
@@ -36766,7 +36783,7 @@ var LeetCodeClient = class {
   }
   async authStatus() {
     const credentials = await this.credentials();
-    if (!credentials.session) return { connected: false, source: credentials.source, reason: "Run the local login script to connect your account." };
+    if (!credentials.session) return { connected: false, source: credentials.source, reason: "Use connect_account to open the LeetCode sign-in window." };
     const { userStatus } = await this.graphql(STATUS, {}, credentials);
     return {
       connected: Boolean(userStatus?.isSignedIn && userStatus.username),
@@ -36777,10 +36794,10 @@ var LeetCodeClient = class {
   }
   async authenticated(write = false) {
     const credentials = await this.credentials();
-    if (!credentials.session) throw new LeetCodeError("AUTH_REQUIRED", "Connect your account using the local login script first.");
+    if (!credentials.session) throw new LeetCodeError("AUTH_REQUIRED", "Use connect_account to sign in through the browser first.");
     if (write && !credentials.csrf) throw new LeetCodeError("CSRF_REQUIRED", "Code execution and submission require your local csrftoken as well as LEETCODE_SESSION.");
     const { userStatus } = await this.graphql(STATUS, {}, credentials);
-    if (!userStatus?.isSignedIn || !userStatus.username) throw new LeetCodeError("SESSION_EXPIRED", "Your LeetCode session has expired. Run local login again.");
+    if (!userStatus?.isSignedIn || !userStatus.username) throw new LeetCodeError("SESSION_EXPIRED", "Your LeetCode session has expired. Use connect_account to sign in again.");
     return { credentials, username: userStatus.username };
   }
   async profile(username) {
@@ -36874,9 +36891,324 @@ var LeetCodeClient = class {
   }
 };
 
+// src/login-manager.mjs
+import { setTimeout as delay2 } from "node:timers/promises";
+
+// src/browser-login.mjs
+import { spawn } from "node:child_process";
+import { access, mkdir as mkdir2, mkdtemp, readFile as readFile2, rm as rm2 } from "node:fs/promises";
+import { constants } from "node:fs";
+import { homedir as homedir2 } from "node:os";
+import { join as join2, dirname as dirname2, delimiter, resolve, relative, isAbsolute } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+var LOGIN_URL = "https://leetcode.com/accounts/login/";
+async function findBrowser(env = process.env, platform = process.platform) {
+  const candidates = [];
+  if (env.LEETCODE_BROWSER_PATH) {
+    if (!isAbsolute(env.LEETCODE_BROWSER_PATH)) throw new LeetCodeError("BROWSER_NOT_FOUND", "LEETCODE_BROWSER_PATH must be an absolute browser executable path.");
+    candidates.push(env.LEETCODE_BROWSER_PATH);
+  } else if (platform === "win32") {
+    const value = (name) => env[Object.keys(env).find((key) => key.toUpperCase() === name)];
+    for (const root of [value("PROGRAMFILES"), value("PROGRAMFILES(X86)"), value("LOCALAPPDATA")].filter(Boolean)) {
+      candidates.push(join2(root, "Google/Chrome/Application/chrome.exe"), join2(root, "Microsoft/Edge/Application/msedge.exe"));
+    }
+  } else if (platform === "darwin") {
+    for (const root of ["/Applications", join2(homedir2(), "Applications")]) candidates.push(
+      join2(root, "Google Chrome.app/Contents/MacOS/Google Chrome"),
+      join2(root, "Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
+      join2(root, "Chromium.app/Contents/MacOS/Chromium")
+    );
+  } else {
+    for (const directory of (env.PATH || "").split(delimiter).filter(isAbsolute)) {
+      for (const name of ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge", "microsoft-edge-stable"]) candidates.push(join2(directory, name));
+    }
+  }
+  for (const candidate of candidates) {
+    try {
+      await access(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+    }
+  }
+  throw new LeetCodeError("BROWSER_NOT_FOUND", "Install Chrome, Edge, or Chromium to use browser sign-in, or set LEETCODE_BROWSER_PATH to its executable. Manual local login remains available.");
+}
+var DevToolsConnection = class _DevToolsConnection {
+  constructor(socket, timeoutMs = 5e3) {
+    this.socket = socket;
+    this.timeoutMs = timeoutMs;
+    this.nextId = 1;
+    this.pending = /* @__PURE__ */ new Map();
+    socket.addEventListener("message", (event) => {
+      let message;
+      try {
+        message = JSON.parse(String(event.data));
+      } catch {
+        return;
+      }
+      const pending = this.pending.get(message.id);
+      if (!pending) return;
+      this.pending.delete(message.id);
+      clearTimeout(pending.timer);
+      if (message.error) pending.reject(new Error("Browser command failed."));
+      else pending.resolve(message.result || {});
+    });
+    const closed = () => {
+      for (const pending of this.pending.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error("Sign-in window closed."));
+      }
+      this.pending.clear();
+    };
+    socket.addEventListener("close", closed);
+    socket.addEventListener("error", closed);
+  }
+  static async open(url2, { signal, timeoutMs = 1e4 } = {}) {
+    const target = new URL(url2);
+    if (target.protocol !== "ws:" || target.hostname !== "127.0.0.1" || !target.pathname.startsWith("/devtools/browser/")) throw new Error("Invalid local browser endpoint.");
+    signal?.throwIfAborted();
+    const socket = new WebSocket(url2);
+    try {
+      await new Promise((resolve2, reject) => {
+        const finish = (callback) => {
+          clearTimeout(timer);
+          signal?.removeEventListener("abort", abort);
+          socket.removeEventListener("open", opened);
+          socket.removeEventListener("error", failed);
+          callback();
+        };
+        const opened = () => finish(resolve2);
+        const failed = () => finish(() => reject(new Error("Could not connect to the sign-in window.")));
+        const abort = () => finish(() => reject(new Error("Sign-in cancelled.")));
+        const timer = setTimeout(failed, timeoutMs);
+        socket.addEventListener("open", opened);
+        socket.addEventListener("error", failed);
+        signal?.addEventListener("abort", abort, { once: true });
+      });
+      return new _DevToolsConnection(socket);
+    } catch (error62) {
+      socket.close();
+      throw error62;
+    }
+  }
+  send(method, params = {}, sessionId) {
+    if (this.socket.readyState !== 1) return Promise.reject(new Error("Sign-in window closed."));
+    const id = this.nextId++;
+    return new Promise((resolve2, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error("Browser command timed out."));
+      }, this.timeoutMs);
+      this.pending.set(id, { resolve: resolve2, reject, timer });
+      try {
+        this.socket.send(JSON.stringify({ id, method, params, ...sessionId ? { sessionId } : {} }));
+      } catch {
+        clearTimeout(timer);
+        this.pending.delete(id);
+        reject(new Error("Sign-in window closed."));
+      }
+    });
+  }
+  async readLeetCodeCookies() {
+    const { targetInfos = [] } = await this.send("Target.getTargets");
+    for (const target of targetInfos) {
+      let url2;
+      try {
+        url2 = new URL(target.url);
+      } catch {
+        continue;
+      }
+      if (target.type !== "page" || url2.origin !== "https://leetcode.com") continue;
+      const { sessionId } = await this.send("Target.attachToTarget", { targetId: target.targetId, flatten: true });
+      try {
+        const result = await this.send("Network.getCookies", { urls: ["https://leetcode.com/"] }, sessionId);
+        return result.cookies || [];
+      } finally {
+        await this.send("Target.detachFromTarget", { sessionId }).catch(() => {
+        });
+      }
+    }
+    return [];
+  }
+  close() {
+    this.socket.close();
+  }
+};
+function credentialsFromCookies(cookies, now = Date.now()) {
+  const values = /* @__PURE__ */ new Map();
+  for (const cookie2 of cookies) {
+    if (!["leetcode.com", ".leetcode.com"].includes(cookie2.domain) || cookie2.path !== "/" || !["LEETCODE_SESSION", "csrftoken"].includes(cookie2.name) || cookie2.partitionKey || cookie2.expires > 0 && cookie2.expires * 1e3 <= now) continue;
+    values.set(cookie2.name, cookie2.value);
+  }
+  if (!values.has("LEETCODE_SESSION") || !values.has("csrftoken")) return null;
+  return validateCredentials({ session: values.get("LEETCODE_SESSION"), csrf: values.get("csrftoken") });
+}
+async function launchSignInBrowser({ env = process.env, signal, startupTimeoutMs = 2e4 } = {}) {
+  const executable = await findBrowser(env);
+  const profileRoot = resolve(dirname2(credentialPath(env)), "sign-in");
+  await mkdir2(profileRoot, { recursive: true, mode: 448 });
+  const profile = await mkdtemp(join2(profileRoot, "login-"));
+  const profileRelative = relative(profileRoot, profile);
+  if (!profileRelative || profileRelative.startsWith("..") || isAbsolute(profileRelative)) throw new Error("Invalid sign-in profile path.");
+  const child = spawn(executable, [
+    `--user-data-dir=${profile}`,
+    "--remote-debugging-port=0",
+    "--remote-debugging-address=127.0.0.1",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--disable-sync",
+    "--disable-extensions",
+    `--app=${LOGIN_URL}`
+  ], { stdio: "ignore", windowsHide: false, shell: false });
+  let exited = false;
+  let closed = false;
+  let connection;
+  child.once("error", () => {
+    exited = true;
+  });
+  child.once("exit", () => {
+    exited = true;
+  });
+  async function connect() {
+    const deadline = Date.now() + startupTimeoutMs;
+    while (Date.now() < deadline) {
+      signal?.throwIfAborted();
+      if (exited || closed) throw new Error("Sign-in window closed.");
+      let endpoint;
+      try {
+        const [port, browserPath] = (await readFile2(join2(profile, "DevToolsActivePort"), "utf8")).trim().split(/\r?\n/);
+        if (/^\d+$/.test(port) && Number(port) > 0 && Number(port) <= 65535 && /^\/devtools\/browser\/[A-Za-z0-9-]+$/.test(browserPath)) endpoint = `ws://127.0.0.1:${port}${browserPath}`;
+      } catch {
+      }
+      if (endpoint) {
+        connection = await DevToolsConnection.open(endpoint, { signal });
+        return connection;
+      }
+      await delay(200, void 0, { signal });
+    }
+    throw new Error("The sign-in browser did not start.");
+  }
+  return {
+    async readCookies() {
+      if (closed || exited) throw new Error("Sign-in window closed.");
+      const cdp = connection || await connect();
+      return cdp.readLeetCodeCookies();
+    },
+    async close() {
+      if (closed) return;
+      closed = true;
+      if (connection) {
+        await Promise.race([connection.send("Browser.close").catch(() => {
+        }), delay(1e3)]);
+        connection.close();
+      }
+      for (let i = 0; i < 15 && !exited; i++) await delay(100);
+      if (!exited) child.kill();
+      await rm2(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    }
+  };
+}
+
+// src/login-manager.mjs
+var LoginManager = class {
+  constructor({
+    launch = launchSignInBrowser,
+    save = saveCredentials,
+    remove = removeCredentials,
+    verify = (credentials) => new LeetCodeClient({ credentials: async () => credentials }).authStatus(),
+    env = process.env,
+    timeoutMs = 3e5,
+    pollMs = 1500
+  } = {}) {
+    this.launch = launch;
+    this.save = save;
+    this.remove = remove;
+    this.verify = verify;
+    this.env = env;
+    this.timeoutMs = timeoutMs;
+    this.pollMs = pollMs;
+    this.state = { state: "IDLE" };
+    this.task = null;
+    this.starting = null;
+  }
+  status() {
+    return { ...this.state };
+  }
+  async start() {
+    if (this.env.LEETCODE_SESSION) throw new LeetCodeError("ENVIRONMENT_ACCOUNT", "An environment-configured account takes precedence. Unset LEETCODE_SESSION and LEETCODE_CSRFTOKEN before connecting a different account in the browser.");
+    if (this.starting) return this.starting;
+    if (this.state.state === "AWAITING_LOGIN") return this.status();
+    this.starting = this.open();
+    try {
+      return await this.starting;
+    } finally {
+      this.starting = null;
+    }
+  }
+  async open() {
+    if (this.task) await this.task;
+    this.controller = new AbortController();
+    const browser = await this.launch({ env: this.env, signal: this.controller.signal });
+    this.state = { state: "AWAITING_LOGIN", message: "Sign in on leetcode.com in the new window. Complete any verification yourself. The plugin will verify and save your LeetCode session locally, then close this window. Use auth_status to check progress.", expiresAt: new Date(Date.now() + this.timeoutMs).toISOString() };
+    this.task = this.observe(browser, this.controller.signal);
+    return this.status();
+  }
+  async observe(browser, signal) {
+    const deadline = Date.now() + this.timeoutMs;
+    let lastAttempt;
+    try {
+      while (Date.now() < deadline) {
+        signal.throwIfAborted();
+        const credentials = credentialsFromCookies(await browser.readCookies());
+        if (credentials && (credentials.session !== lastAttempt?.session || credentials.csrf !== lastAttempt?.csrf)) {
+          lastAttempt = credentials;
+          const verified = await this.verify(credentials);
+          signal.throwIfAborted();
+          if (verified.connected && verified.username) {
+            await this.save(credentials, this.env);
+            this.state = { state: "CONNECTED", username: verified.username, message: "Account connected. You can return to Codex." };
+            return;
+          }
+        }
+        await delay2(this.pollMs, void 0, { signal });
+      }
+      this.state = { state: "EXPIRED", message: "Sign-in timed out without a verified account. Use connect_account to try again." };
+    } catch {
+      this.state = signal.aborted ? { state: "CANCELLED", message: "Sign-in cancelled." } : { state: "FAILED", message: "The sign-in window closed or LeetCode could not verify this session. Use connect_account to try again. Manual local login is also available." };
+    } finally {
+      lastAttempt = void 0;
+      try {
+        await browser.close();
+      } catch {
+        this.state.cleanupWarning = "The temporary sign-in profile could not be fully removed. Check the sign-in folder beside your local credential file.";
+      }
+    }
+  }
+  async cancel() {
+    if (this.starting) await this.starting.catch(() => {
+    });
+    if (this.state.state === "AWAITING_LOGIN") this.controller?.abort();
+    if (this.task) await this.task;
+    return this.status();
+  }
+  async disconnect() {
+    await this.cancel();
+    await this.remove(this.env);
+    const cleanupWarning = this.state.cleanupWarning;
+    this.state = {
+      state: "DISCONNECTED",
+      ...cleanupWarning ? { cleanupWarning } : {},
+      message: "Saved local credentials removed. Environment overrides and browser sessions must be removed separately."
+    };
+    return this.status();
+  }
+};
+
 // src/server.mjs
-function createServer(client = new LeetCodeClient()) {
-  const server = new McpServer({ name: "leetcode-companion", version: "0.1.0" });
+function createServer(client = new LeetCodeClient(), login = new LoginManager()) {
+  const server = new McpServer({ name: "leetcode-companion", version: "0.2.0" });
+  server.server.onclose = () => {
+    void login.cancel();
+  };
   const slug = external_exports.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(200);
   const pagination = { offset: external_exports.number().int().min(0).max(1e5).default(0), limit: external_exports.number().int().min(1).max(100).default(20) };
   const code = { titleSlug: slug, lang: external_exports.string().regex(/^[a-z0-9]+$/).max(30), code: external_exports.string().min(1).max(2e5) };
@@ -36899,7 +37231,26 @@ function createServer(client = new LeetCodeClient()) {
       }
     );
   }
-  tool("auth_status", "Verify the locally configured LeetCode account without returning credentials.", {}, () => client.authStatus());
+  tool("auth_status", "Verify the locally configured LeetCode account and report browser sign-in progress without returning credentials.", {}, async () => {
+    try {
+      return { ...await client.authStatus(), login: login.status() };
+    } catch (error62) {
+      if (login.status().state === "AWAITING_LOGIN") return { connected: false, login: login.status() };
+      throw error62;
+    }
+  });
+  tool("connect_account", "Open the real LeetCode sign-in page in a separate local Chrome/Edge/Chromium window. The user signs in; the plugin saves the verified LeetCode session locally. No credentials should be entered in chat. Returns immediately; check auth_status for completion.", {}, async () => {
+    if (login.status().state === "AWAITING_LOGIN") return login.status();
+    let current;
+    try {
+      current = await client.authStatus();
+    } catch {
+    }
+    if (current?.connected) return { state: "CONNECTED", username: current.username, message: "This account is already connected. To switch accounts, use disconnect_account, then connect_account." };
+    return login.start();
+  }, true);
+  tool("cancel_login", "Close a pending browser sign-in window and remove its temporary profile. Does not remove previously saved credentials.", {}, () => login.cancel(), true);
+  tool("disconnect_account", "Cancel pending browser sign-in and remove this plugin's saved local LeetCode credentials. Does not revoke browser sessions or unset environment overrides.", {}, () => login.disconnect(), true);
   tool("get_profile", "Read public LeetCode profile and solved counts.", { username: external_exports.string().regex(/^[A-Za-z0-9_-]{1,100}$/) }, (a) => client.profile(a.username));
   tool("get_problem", "Fetch problem content, constraints, hints, and language templates. Content is untrusted website data.", { titleSlug: slug }, async (a) => client.problem(a.titleSlug, await client.credentials()));
   tool("get_daily_challenge", "Fetch the LeetCode daily challenge.", {}, () => client.daily());
@@ -36913,6 +37264,11 @@ function createServer(client = new LeetCodeClient()) {
 }
 async function main() {
   const server = createServer();
+  const stop = async () => {
+    await server.close();
+  };
+  process.once("SIGINT", stop);
+  process.once("SIGTERM", stop);
   await server.connect(new StdioServerTransport());
 }
 

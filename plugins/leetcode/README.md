@@ -14,7 +14,7 @@
   <a href="#install">Install</a> &nbsp;&middot;&nbsp;
   <a href="#connect-your-account">Connect your account</a> &nbsp;&middot;&nbsp;
   <a href="#tools">Tools</a> &nbsp;&middot;&nbsp;
-  <a href="https://github.com/Abhigyan2000/leetcode-plugin/releases/tag/v0.1.0">Download</a>
+  <a href="https://github.com/Abhigyan2000/leetcode-plugin/releases/tag/v0.2.0">Download</a>
 </p>
 
 </div>
@@ -25,7 +25,7 @@ The plugin runs on your computer and talks directly to LeetCode. Each person con
 
 ## Install
 
-You'll need **Node.js 22 or newer** and a desktop Codex client with plugin support.
+You'll need **Node.js 22 or newer**, a desktop Codex client with plugin support, and Chrome, Edge, or Chromium for browser sign-in.
 
 ```sh
 codex plugin marketplace add Abhigyan2000/leetcode-plugin --ref main
@@ -64,22 +64,22 @@ Adjust the configuration wrapper to match your client. A direct MCP connection p
 
 ## Connect your account
 
-The plugin uses cookies from your signed-in LeetCode session. Open the installed `leetcode` plugin folder in your terminal, or `plugins/leetcode` if you're working from a checkout, and run:
+Run the plugin's **Setup** workflow, or ask Codex:
 
-```sh
-node scripts/auth.mjs login
-```
+> Connect my LeetCode account.
 
-1. Sign in to [leetcode.com](https://leetcode.com) in your browser.
-2. Open Developer Tools, then **Application** or **Storage**, and find the cookies for `https://leetcode.com`.
-3. Copy `LEETCODE_SESSION` and `csrftoken` into the terminal's hidden prompts.
+1. The plugin opens [LeetCode's sign-in page](https://leetcode.com/accounts/login/) in a separate browser window.
+2. Sign in and complete any verification there.
+3. Once LeetCode verifies your account, the plugin saves your session locally and closes the window. Codex can then report the connected username.
 
-Login verifies your session before saving it and prints the connected username. Cookies stay in a local credentials file outside the repository. Keep them out of chat messages, issues, and command-line arguments.
+No terminal commands or cookie copying are needed. The window uses a temporary browser profile, separate from your usual tabs and accounts. The plugin reads only the resulting LeetCode session cookies. It doesn't inspect passwords or sign-in fields.
+
+You can ask Codex to cancel a pending login or disconnect the saved account. Sign-in expires after five minutes. This is a local browser connection; no account credentials pass through a project-operated server.
 
 The credentials file is **plaintext**. It uses owner-only permissions on POSIX and your user profile's inherited permissions on Windows. See [Security](SECURITY.md) for details.
 
 <details>
-<summary>Credential storage, environment variables, and logout</summary>
+<summary>Credential storage, browser selection, and manual setup</summary>
 
 Default storage locations:
 
@@ -95,17 +95,26 @@ You can also configure the MCP process environment:
 | `LEETCODE_SESSION` | Session cookie; overrides the saved account |
 | `LEETCODE_CSRFTOKEN` | Matching CSRF token, required to run or submit code |
 | `LEETCODE_CREDENTIALS_FILE` | Custom path for the local credentials file |
+| `LEETCODE_BROWSER_PATH` | Absolute path to a Chrome, Edge, or Chromium executable |
 
 An environment session uses only its matching environment CSRF token. It never borrows one from the saved account. Credentials are reloaded for each operation, so refreshing the local file doesn't require a server restart.
 
-To check local configuration or remove saved credentials:
+The plugin checks standard browser installation paths. On Linux, it also checks your executable search path. It doesn't download a browser. If sign-in is unavailable in your browser, manual local setup is still supported: open the installed `leetcode` plugin folder in your terminal and run:
+
+```sh
+node scripts/auth.mjs login
+```
+
+Copy `LEETCODE_SESSION` and `csrftoken` from your signed-in browser's Developer Tools > Application/Storage > Cookies into the hidden prompts. Keep cookies out of chat and command-line arguments.
+
+To check local configuration or remove saved credentials from a terminal:
 
 ```sh
 node scripts/auth.mjs status
 node scripts/auth.mjs logout
 ```
 
-Use the `auth_status` tool in Codex to verify the account with LeetCode. Run login again when the session expires. Logout deletes the saved file; unset any environment overrides separately. It does not revoke your browser session.
+The same account checks and logout are available through `auth_status` and `disconnect_account` in Codex. Reconnect when the session expires. Disconnecting deletes the saved file; unset any environment overrides separately. It does not revoke your browser session.
 
 </details>
 
@@ -126,6 +135,9 @@ Public profiles, problem statements, and the daily challenge work without login.
 | Tool | What it does |
 | --- | --- |
 | `auth_status` | Verify the connected account without returning cookies |
+| `connect_account` | Open LeetCode's sign-in window and connect your account |
+| `cancel_login` | Close a pending sign-in window |
+| `disconnect_account` | Remove the plugin's saved local credentials |
 | `get_profile` | Read a public profile and solved counts |
 | `get_problem` | Fetch a statement, hints, tags, and language templates |
 | `get_daily_challenge` | Get the current daily challenge |
@@ -163,7 +175,7 @@ This fetches Two Sum and the daily challenge without loading credentials. Authen
 
 ## Project status
 
-**v0.1.0 is an early release for leetcode.com.** Public problem reads have been verified against the live site. LeetCode's website APIs can change, sessions expire, and some requests may require a browser check. The plugin respects those checks and premium access restrictions.
+**v0.2.0 is an early release for leetcode.com.** Public problem reads have been verified against the live site. LeetCode's website APIs can change, sessions expire, and some requests may require a browser check. Complete those checks yourself in the sign-in window. The plugin doesn't bypass them or premium access restrictions.
 
 Distribution is through this GitHub marketplace and the release ZIP. The plugin isn't listed in OpenAI's public directory.
 

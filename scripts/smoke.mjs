@@ -35,13 +35,13 @@ transport.stderr?.on('data', chunk => { stderr += chunk; });
 try {
   await client.connect(transport);
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 10);
+  assert.equal(tools.length, 13);
   const status = await client.callTool({ name: 'auth_status', arguments: {} });
   assert.equal(JSON.parse(status.content[0].text).connected, false);
   const write = await client.callTool({ name: 'submit_solution', arguments: { titleSlug: 'two-sum', lang: 'python3', code: 'class Solution: pass' } });
   assert.equal(write.isError, true);
   assert.equal(JSON.parse(write.content[0].text).code, 'AUTH_REQUIRED');
-  console.log('Standalone installed plugin: MCP handshake, 10 tools, safe disconnected state, and protected submission verified.');
+  console.log('Standalone installed plugin: MCP handshake, 13 tools, safe disconnected state, and protected submission verified.');
 } catch (error) {
   console.error(stderr);
   throw error;

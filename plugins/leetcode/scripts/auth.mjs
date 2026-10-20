@@ -84,7 +84,7 @@ var LeetCodeClient = class {
     const headers = {
       Accept: "application/json",
       Referer: ORIGIN + referer,
-      "User-Agent": "LeetCodeCompanion/0.1.0 (community desktop plugin)"
+      "User-Agent": "LeetCodeCompanion/0.2.0 (community desktop plugin)"
     };
     if (body) headers["Content-Type"] = "application/json";
     if (credentials?.session) {
@@ -138,7 +138,7 @@ var LeetCodeClient = class {
   }
   async authStatus() {
     const credentials = await this.credentials();
-    if (!credentials.session) return { connected: false, source: credentials.source, reason: "Run the local login script to connect your account." };
+    if (!credentials.session) return { connected: false, source: credentials.source, reason: "Use connect_account to open the LeetCode sign-in window." };
     const { userStatus } = await this.graphql(STATUS, {}, credentials);
     return {
       connected: Boolean(userStatus?.isSignedIn && userStatus.username),
@@ -149,10 +149,10 @@ var LeetCodeClient = class {
   }
   async authenticated(write = false) {
     const credentials = await this.credentials();
-    if (!credentials.session) throw new LeetCodeError("AUTH_REQUIRED", "Connect your account using the local login script first.");
+    if (!credentials.session) throw new LeetCodeError("AUTH_REQUIRED", "Use connect_account to sign in through the browser first.");
     if (write && !credentials.csrf) throw new LeetCodeError("CSRF_REQUIRED", "Code execution and submission require your local csrftoken as well as LEETCODE_SESSION.");
     const { userStatus } = await this.graphql(STATUS, {}, credentials);
-    if (!userStatus?.isSignedIn || !userStatus.username) throw new LeetCodeError("SESSION_EXPIRED", "Your LeetCode session has expired. Run local login again.");
+    if (!userStatus?.isSignedIn || !userStatus.username) throw new LeetCodeError("SESSION_EXPIRED", "Your LeetCode session has expired. Use connect_account to sign in again.");
     return { credentials, username: userStatus.username };
   }
   async profile(username) {

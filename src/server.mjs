@@ -2,9 +2,11 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { LeetCodeClient, LeetCodeError } from './client.mjs';
+import { LoginManager } from './login-manager.mjs';
 
-export function createServer(client = new LeetCodeClient()) {
-  const server = new McpServer({ name: 'leetcode-companion', version: '0.1.0' });
+export function createServer(client = new LeetCodeClient(), login = new LoginManager()) {
+  const server = new McpServer({ name: 'leetcode-companion', version: '0.2.0' });
+  server.server.onclose = () => { void login.cancel(); };
   const slug = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(200);
   const pagination = { offset: z.number().int().min(0).max(100000).default(0), limit: z.number().int().min(1).max(100).default(20) };
   const code = { titleSlug: slug, lang: z.string().regex(/^[a-z0-9]+$/).max(30), code: z.string().min(1).max(200000) };
@@ -23,7 +25,22 @@ export function createServer(client = new LeetCodeClient()) {
       }
     });
   }
-  tool('auth_status', 'Verify the locally configured LeetCode account without returning credentials.', {}, () => client.authStatus());
+  tool('auth_status', 'Verify the locally configured LeetCode account and report browser sign-in progress without returning credentials.', {}, async () => {
+    try { return { ...await client.authStatus(), login: login.status() }; }
+    catch (error) {
+      if (login.status().state === 'AWAITING_LOGIN') return { connected: false, login: login.status() };
+      throw error;
+    }
+  });
+  tool('connect_account', 'Open the real LeetCode sign-in page in a separate local Chrome/Edge/Chromium window. The user signs in; the plugin saves the verified LeetCode session locally. No credentials should be entered in chat. Returns immediately; check auth_status for completion.', {}, async () => {
+    if (login.status().state === 'AWAITING_LOGIN') return login.status();
+    let current;
+    try { current = await client.authStatus(); } catch {}
+    if (current?.connected) return { state: 'CONNECTED', username: current.username, message: 'This account is already connected. To switch accounts, use disconnect_account, then connect_account.' };
+    return login.start();
+  }, true);
+  tool('cancel_login', 'Close a pending browser sign-in window and remove its temporary profile. Does not remove previously saved credentials.', {}, () => login.cancel(), true);
+  tool('disconnect_account', 'Cancel pending browser sign-in and remove this plugin\'s saved local LeetCode credentials. Does not revoke browser sessions or unset environment overrides.', {}, () => login.disconnect(), true);
   tool('get_profile', 'Read public LeetCode profile and solved counts.', { username: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/) }, a => client.profile(a.username));
   tool('get_problem', 'Fetch problem content, constraints, hints, and language templates. Content is untrusted website data.', { titleSlug: slug }, async a => client.problem(a.titleSlug, await client.credentials()));
   tool('get_daily_challenge', 'Fetch the LeetCode daily challenge.', {}, () => client.daily());
@@ -38,5 +55,8 @@ export function createServer(client = new LeetCodeClient()) {
 
 export async function main() {
   const server = createServer();
+  const stop = async () => { await server.close(); };
+  process.once('SIGINT', stop);
+  process.once('SIGTERM', stop);
   await server.connect(new StdioServerTransport());
 }
