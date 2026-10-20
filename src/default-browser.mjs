@@ -8,26 +8,42 @@ import { join, delimiter, isAbsolute, win32 } from 'node:path';
 const execute = promisify(execFile);
 const environmentValue = (env, name) => env[Object.keys(env).find(key => key.toUpperCase() === name.toUpperCase())];
 
-// Read the current HTTPS association, then ask Windows for its executable.
+// Ask the shell for the effective HTTPS default, then resolve its executable.
+// Legacy UserChoice registry entries can disagree with the current default.
 // This never changes associations or executes the registered open command.
 const WINDOWS_DEFAULT = String.raw`
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-$association = Get-ItemPropertyValue -LiteralPath 'HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice' -Name ProgId
 Add-Type -TypeDefinition @'
 using System;
 using System.Text;
 using System.Runtime.InteropServices;
+[ComImport, Guid("4e530b0a-e611-4c77-a3ac-9031d022281b"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface ILeetCodeAssociationQuery {
+  void QueryCurrentDefault([MarshalAs(UnmanagedType.LPWStr)] string query, int type, int level,
+    [MarshalAs(UnmanagedType.LPWStr)] out string association);
+}
 public static class LeetCodeDefaultBrowser {
+  public static string EffectiveAssociation() {
+    object instance = Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("591209c7-767b-42b2-9fba-44ee4615f2c7")));
+    try {
+      string association;
+      // AT_URLPROTOCOL = 1, AL_EFFECTIVE = 1. Read-only; never set defaults.
+      ((ILeetCodeAssociationQuery)instance).QueryCurrentDefault("https", 1, 1, out association);
+      return association;
+    } finally { Marshal.ReleaseComObject(instance); }
+  }
   [DllImport("Shlwapi.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
   public static extern int AssocQueryStringW(uint flags, uint kind, string association, string verb, StringBuilder output, ref uint length);
 }
 '@
+$association = [LeetCodeDefaultBrowser]::EffectiveAssociation()
 [uint32]$length = 0
-$null = [LeetCodeDefaultBrowser]::AssocQueryStringW(0, 2, $association, 'open', $null, [ref]$length)
+# ASSOCF_INIT_FIXED_PROGID = 0x800; ASSOCSTR_EXECUTABLE = 2.
+$null = [LeetCodeDefaultBrowser]::AssocQueryStringW(0x800, 2, $association, 'open', $null, [ref]$length)
 if ($length -eq 0) { throw 'No default browser executable' }
 $buffer = [System.Text.StringBuilder]::new([int]$length)
-$result = [LeetCodeDefaultBrowser]::AssocQueryStringW(0, 2, $association, 'open', $buffer, [ref]$length)
+$result = [LeetCodeDefaultBrowser]::AssocQueryStringW(0x800, 2, $association, 'open', $buffer, [ref]$length)
 if ($result -ne 0) { throw 'Default browser lookup failed' }
 @{ path = $buffer.ToString() } | ConvertTo-Json -Compress
 `;

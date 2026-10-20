@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { defaultBrowserExecutable, desktopExecutable, supportsBrowserSignIn } from '../src/default-browser.mjs';
 
-test('Windows resolves the per-user HTTPS default with case-insensitive environment names', async () => {
-  const expected = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+test('Windows queries the effective HTTPS default instead of stale registry choices', async () => {
+  const expected = 'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe';
   let calls = 0;
   const actual = await defaultBrowserExecutable({ platform: 'win32', env: { SystemRoot: 'C:\\Windows' },
     run: async (file, args, options) => {
@@ -12,6 +12,10 @@ test('Windows resolves the per-user HTTPS default with case-insensitive environm
       assert.equal(options.shell, false);
       assert.equal(options.windowsHide, true);
       assert.ok(args.includes('-NonInteractive'));
+      const script = args.at(-1);
+      assert.match(script, /QueryCurrentDefault\("https", 1, 1, out association\)/);
+      assert.match(script, /AssocQueryStringW\(0x800, 2, \$association/);
+      assert.doesNotMatch(script, /Get-ItemProperty|SetAppAsDefault|Set-ItemProperty/);
       return { stdout: JSON.stringify({ path: expected }) };
     }, canAccess: async path => { assert.equal(path, expected); } });
   assert.equal(actual, expected);

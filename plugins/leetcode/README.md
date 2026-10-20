@@ -14,7 +14,7 @@
   <a href="#install">Install</a> &nbsp;&middot;&nbsp;
   <a href="#connect-your-account">Connect your account</a> &nbsp;&middot;&nbsp;
   <a href="#tools">Tools</a> &nbsp;&middot;&nbsp;
-  <a href="https://github.com/Abhigyan2000/leetcode-plugin/releases/tag/v0.2.1">Download</a>
+  <a href="https://github.com/Abhigyan2000/leetcode-plugin/releases/tag/v0.2.2">Download</a>
 </p>
 
 </div>
@@ -74,7 +74,7 @@ Run the plugin's **Setup** workflow, or ask Codex:
 
 No terminal commands or cookie copying are needed. The window uses a temporary browser profile, separate from your usual tabs and accounts. The plugin reads only the resulting LeetCode session cookies. It doesn't inspect passwords or sign-in fields.
 
-The default browser is read from your operating system's HTTPS association. If it isn't supported by the sign-in adapter, the plugin explains that instead of choosing a different browser. Firefox, Safari, and sandboxed launchers such as Flatpak aren't supported by this adapter. You can select a supported executable explicitly with `LEETCODE_BROWSER_PATH`.
+The default browser is read from your operating system's HTTPS association. On Windows, the plugin asks the shell for the current effective default rather than reading legacy registry preferences. If it isn't supported by the sign-in adapter, the plugin explains that instead of choosing a different browser. Firefox, Safari, and sandboxed launchers such as Flatpak aren't supported by this adapter. You can select a supported executable explicitly with `LEETCODE_BROWSER_PATH`.
 
 You can ask Codex to cancel a pending login or disconnect the saved account. Sign-in expires after five minutes. This is a local browser connection; no account credentials pass through a project-operated server.
 
@@ -177,7 +177,7 @@ This fetches Two Sum and the daily challenge without loading credentials. Authen
 
 ## Project status
 
-**v0.2.1 is an early release for leetcode.com.** Public problem reads have been verified against the live site. LeetCode's website APIs can change, sessions expire, and some requests may require a browser check. Complete those checks yourself in the sign-in window. The plugin doesn't bypass them or premium access restrictions.
+**v0.2.2 is an early release for leetcode.com.** Public problem reads have been verified against the live site. LeetCode's website APIs can change, sessions expire, and some requests may require a browser check. Complete those checks yourself in the sign-in window. The plugin doesn't bypass them or premium access restrictions.
 
 Distribution is through this GitHub marketplace and the release ZIP. The plugin isn't listed in OpenAI's public directory.
 

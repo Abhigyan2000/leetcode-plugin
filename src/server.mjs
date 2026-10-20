@@ -5,7 +5,7 @@ import { LeetCodeClient, LeetCodeError } from './client.mjs';
 import { LoginManager } from './login-manager.mjs';
 
 export function createServer(client = new LeetCodeClient(), login = new LoginManager()) {
-  const server = new McpServer({ name: 'leetcode-companion', version: '0.2.1' });
+  const server = new McpServer({ name: 'leetcode-companion', version: '0.2.2' });
   server.server.onclose = () => { void login.cancel(); };
   const slug = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(200);
   const pagination = { offset: z.number().int().min(0).max(100000).default(0), limit: z.number().int().min(1).max(100).default(20) };
