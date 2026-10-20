@@ -1,38 +1,46 @@
-import { spawn } from 'node:child_process';
-import { access, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
-import { constants } from 'node:fs';
-import { homedir } from 'node:os';
-import { join, dirname, delimiter, resolve, relative, isAbsolute } from 'node:path';
+import { spawn, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { join, dirname, resolve, relative, isAbsolute } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { credentialPath, validateCredentials } from './credentials.mjs';
 import { LeetCodeError } from './client.mjs';
+import { defaultBrowserExecutable, resolveBrowserExecutable, supportsBrowserSignIn } from './default-browser.mjs';
 
 const LOGIN_URL = 'https://leetcode.com/accounts/login/';
+const execute = promisify(execFile);
 
-export async function findBrowser(env = process.env, platform = process.platform) {
-  const candidates = [];
+async function stopProfileProcesses(profile, env) {
+  if (process.platform !== 'win32') return;
+  const root = env[Object.keys(env).find(key => key.toUpperCase() === 'SYSTEMROOT')];
+  if (!root) return;
+  const script = String.raw`
+$expected = [System.IO.Path]::GetFullPath($env:LEETCODE_SIGNIN_PROFILE)
+Get-CimInstance Win32_Process -Filter "Name='chrome.exe' OR Name='msedge.exe' OR Name='brave.exe' OR Name='vivaldi.exe' OR Name='chromium.exe'" | Where-Object {
+  $match = [regex]::Match($_.CommandLine, '(?:^|\s)--user-data-dir=(?:"([^"]+)"|(\S+))')
+  if ($match.Success) {
+    $value = if ($match.Groups[1].Success) { $match.Groups[1].Value } else { $match.Groups[2].Value }
+    try { [string]::Equals([System.IO.Path]::GetFullPath($value), $expected, [System.StringComparison]::OrdinalIgnoreCase) } catch { $false }
+  }
+} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+`;
+  await execute(join(root, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
+    { env: { ...env, LEETCODE_SIGNIN_PROFILE: profile }, windowsHide: true, shell: false, timeout: 10000 });
+}
+
+export async function findBrowser(env = process.env, platform = process.platform, detect = defaultBrowserExecutable) {
+  let executable;
   if (env.LEETCODE_BROWSER_PATH) {
     if (!isAbsolute(env.LEETCODE_BROWSER_PATH)) throw new LeetCodeError('BROWSER_NOT_FOUND', 'LEETCODE_BROWSER_PATH must be an absolute browser executable path.');
-    candidates.push(env.LEETCODE_BROWSER_PATH);
-  } else if (platform === 'win32') {
-    const value = name => env[Object.keys(env).find(key => key.toUpperCase() === name)];
-    for (const root of [value('PROGRAMFILES'), value('PROGRAMFILES(X86)'), value('LOCALAPPDATA')].filter(Boolean)) {
-      candidates.push(join(root, 'Google/Chrome/Application/chrome.exe'), join(root, 'Microsoft/Edge/Application/msedge.exe'));
-    }
-  } else if (platform === 'darwin') {
-    for (const root of ['/Applications', join(homedir(), 'Applications')]) candidates.push(
-      join(root, 'Google Chrome.app/Contents/MacOS/Google Chrome'),
-      join(root, 'Microsoft Edge.app/Contents/MacOS/Microsoft Edge'),
-      join(root, 'Chromium.app/Contents/MacOS/Chromium'));
+    try { executable = await resolveBrowserExecutable(env.LEETCODE_BROWSER_PATH, env); }
+    catch { throw new LeetCodeError('BROWSER_NOT_FOUND', 'The configured browser executable is unavailable. Check LEETCODE_BROWSER_PATH.'); }
   } else {
-    for (const directory of (env.PATH || '').split(delimiter).filter(isAbsolute)) {
-      for (const name of ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'microsoft-edge', 'microsoft-edge-stable']) candidates.push(join(directory, name));
-    }
+    try { executable = await detect({ env, platform }); }
+    catch { throw new LeetCodeError('DEFAULT_BROWSER_UNAVAILABLE', 'Could not determine your default HTTPS browser. Check the operating system default-browser setting or set LEETCODE_BROWSER_PATH to a supported browser executable.'); }
   }
-  for (const candidate of candidates) {
-    try { await access(candidate, constants.X_OK); return candidate; } catch {}
-  }
-  throw new LeetCodeError('BROWSER_NOT_FOUND', 'Install Chrome, Edge, or Chromium to use browser sign-in, or set LEETCODE_BROWSER_PATH to its executable. Manual local login remains available.');
+  if (!supportsBrowserSignIn(executable)) throw new LeetCodeError('UNSUPPORTED_BROWSER', 'Your selected browser does not support this plugin\'s automatic sign-in connection. Use Chrome, Edge, Brave, Vivaldi, or Chromium as the default, or choose one explicitly with LEETCODE_BROWSER_PATH. Firefox, Safari, and sandboxed browser launchers are not supported by this adapter.');
+  return executable;
 }
 
 // Only a newly created sign-in profile is ever passed to this adapter.
@@ -122,41 +130,44 @@ export function credentialsFromCookies(cookies, now = Date.now()) {
   return validateCredentials({ session: values.get('LEETCODE_SESSION'), csrf: values.get('csrftoken') });
 }
 
-export async function launchSignInBrowser({ env = process.env, signal, startupTimeoutMs = 20000 } = {}) {
+export async function launchSignInBrowser({ env = process.env, signal, startupTimeoutMs = 20000,
+  spawnBrowser = spawn, connectBrowser = DevToolsConnection.open, stopProfile = stopProfileProcesses } = {}) {
   const executable = await findBrowser(env);
   const profileRoot = resolve(dirname(credentialPath(env)), 'sign-in');
   await mkdir(profileRoot, { recursive: true, mode: 0o700 });
   const profile = await mkdtemp(join(profileRoot, 'login-'));
   const profileRelative = relative(profileRoot, profile);
   if (!profileRelative || profileRelative.startsWith('..') || isAbsolute(profileRelative)) throw new Error('Invalid sign-in profile path.');
-  const child = spawn(executable, [
+  const child = spawnBrowser(executable, [
     `--user-data-dir=${profile}`, '--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1',
     '--no-first-run', '--no-default-browser-check', '--disable-sync', '--disable-extensions',
-    `--app=${LOGIN_URL}`,
+    '--new-window', LOGIN_URL,
   ], { stdio: 'ignore', windowsHide: false, shell: false });
   let exited = false;
+  let launchFailed = false;
   let closed = false;
   let connection;
-  child.once('error', () => { exited = true; });
+  child.once('error', () => { exited = true; launchFailed = true; });
   child.once('exit', () => { exited = true; });
   async function connect() {
     const deadline = Date.now() + startupTimeoutMs;
     while (Date.now() < deadline) {
       signal?.throwIfAborted();
-      if (exited || closed) throw new Error('Sign-in window closed.');
+      // Edge can hand off to another browser process and exit its launcher.
+      if (launchFailed || closed) throw new Error('Sign-in window closed.');
       let endpoint;
       try {
         const [port, browserPath] = (await readFile(join(profile, 'DevToolsActivePort'), 'utf8')).trim().split(/\r?\n/);
         if (/^\d+$/.test(port) && Number(port) > 0 && Number(port) <= 65535 && /^\/devtools\/browser\/[A-Za-z0-9-]+$/.test(browserPath)) endpoint = `ws://127.0.0.1:${port}${browserPath}`;
       } catch {}
-      if (endpoint) { connection = await DevToolsConnection.open(endpoint, { signal }); return connection; }
+      if (endpoint) { connection = await connectBrowser(endpoint, { signal }); return connection; }
       await delay(200, undefined, { signal });
     }
     throw new Error('The sign-in browser did not start.');
   }
   return {
     async readCookies() {
-      if (closed || exited) throw new Error('Sign-in window closed.');
+      if (closed || launchFailed) throw new Error('Sign-in window closed.');
       const cdp = connection || await connect();
       return cdp.readLeetCodeCookies();
     },
@@ -169,8 +180,11 @@ export async function launchSignInBrowser({ env = process.env, signal, startupTi
       }
       for (let i = 0; i < 15 && !exited; i++) await delay(100);
       if (!exited) child.kill();
+      // A Windows launcher can have exited while its temporary-profile browser
+      // is still alive. Match only this exact profile, never all browser PIDs.
+      await stopProfile(profile, env).catch(() => {});
       // Checked containment above; never remove a regular user profile.
-      await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+      await rm(profile, { recursive: true, force: true, maxRetries: 2, retryDelay: 100 });
     },
   };
 }

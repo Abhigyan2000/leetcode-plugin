@@ -36729,7 +36729,7 @@ var LeetCodeClient = class {
     const headers = {
       Accept: "application/json",
       Referer: ORIGIN + referer,
-      "User-Agent": "LeetCodeCompanion/0.2.0 (community desktop plugin)"
+      "User-Agent": "LeetCodeCompanion/0.2.1 (community desktop plugin)"
     };
     if (body) headers["Content-Type"] = "application/json";
     if (credentials?.session) {
@@ -36895,42 +36895,154 @@ var LeetCodeClient = class {
 import { setTimeout as delay2 } from "node:timers/promises";
 
 // src/browser-login.mjs
-import { spawn } from "node:child_process";
-import { access, mkdir as mkdir2, mkdtemp, readFile as readFile2, rm as rm2 } from "node:fs/promises";
+import { spawn, execFile as execFile2 } from "node:child_process";
+import { promisify as promisify2 } from "node:util";
+import { mkdir as mkdir2, mkdtemp, readFile as readFile3, rm as rm2 } from "node:fs/promises";
+import { join as join3, dirname as dirname2, resolve, relative, isAbsolute as isAbsolute2 } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+
+// src/default-browser.mjs
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { readFile as readFile2, access } from "node:fs/promises";
 import { constants } from "node:fs";
 import { homedir as homedir2 } from "node:os";
-import { join as join2, dirname as dirname2, delimiter, resolve, relative, isAbsolute } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
-var LOGIN_URL = "https://leetcode.com/accounts/login/";
-async function findBrowser(env = process.env, platform = process.platform) {
-  const candidates = [];
-  if (env.LEETCODE_BROWSER_PATH) {
-    if (!isAbsolute(env.LEETCODE_BROWSER_PATH)) throw new LeetCodeError("BROWSER_NOT_FOUND", "LEETCODE_BROWSER_PATH must be an absolute browser executable path.");
-    candidates.push(env.LEETCODE_BROWSER_PATH);
-  } else if (platform === "win32") {
-    const value = (name) => env[Object.keys(env).find((key) => key.toUpperCase() === name)];
-    for (const root of [value("PROGRAMFILES"), value("PROGRAMFILES(X86)"), value("LOCALAPPDATA")].filter(Boolean)) {
-      candidates.push(join2(root, "Google/Chrome/Application/chrome.exe"), join2(root, "Microsoft/Edge/Application/msedge.exe"));
-    }
-  } else if (platform === "darwin") {
-    for (const root of ["/Applications", join2(homedir2(), "Applications")]) candidates.push(
-      join2(root, "Google Chrome.app/Contents/MacOS/Google Chrome"),
-      join2(root, "Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
-      join2(root, "Chromium.app/Contents/MacOS/Chromium")
-    );
-  } else {
-    for (const directory of (env.PATH || "").split(delimiter).filter(isAbsolute)) {
-      for (const name of ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge", "microsoft-edge-stable"]) candidates.push(join2(directory, name));
-    }
-  }
+import { join as join2, delimiter, isAbsolute, win32 } from "node:path";
+var execute = promisify(execFile);
+var environmentValue = (env, name) => env[Object.keys(env).find((key) => key.toUpperCase() === name.toUpperCase())];
+var WINDOWS_DEFAULT = String.raw`
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$association = Get-ItemPropertyValue -LiteralPath 'HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice' -Name ProgId
+Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public static class LeetCodeDefaultBrowser {
+  [DllImport("Shlwapi.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+  public static extern int AssocQueryStringW(uint flags, uint kind, string association, string verb, StringBuilder output, ref uint length);
+}
+'@
+[uint32]$length = 0
+$null = [LeetCodeDefaultBrowser]::AssocQueryStringW(0, 2, $association, 'open', $null, [ref]$length)
+if ($length -eq 0) { throw 'No default browser executable' }
+$buffer = [System.Text.StringBuilder]::new([int]$length)
+$result = [LeetCodeDefaultBrowser]::AssocQueryStringW(0, 2, $association, 'open', $buffer, [ref]$length)
+if ($result -ne 0) { throw 'Default browser lookup failed' }
+@{ path = $buffer.ToString() } | ConvertTo-Json -Compress
+`;
+var MAC_DEFAULT = `
+ObjC.import('AppKit');
+ObjC.import('Foundation');
+var url = $.NSWorkspace.sharedWorkspace.URLForApplicationToOpenURL($.NSURL.URLWithString('https://leetcode.com'));
+JSON.stringify({path: $.NSBundle.bundleWithURL(url).executablePath.js});
+`;
+function desktopExecutable(text) {
+  const section = text.match(/^\[Desktop Entry\]\s*\r?\n([\s\S]*?)(?=^\[|$(?![\s\S]))/m)?.[1];
+  if (!section) throw new Error("Desktop entry missing");
+  const line = section.match(/^Exec=(.*)$/m)?.[1]?.trim();
+  if (!line) throw new Error("Desktop executable missing");
+  const match = line.match(/^(?:"((?:[^"\\]|\\.)+)"|([^\s"']+))(?:\s|$)/);
+  if (!match) throw new Error("Unsupported desktop command");
+  const executable = (match[1] || match[2]).replace(/\\(["\\])/g, "$1");
+  if (/[\x00-\x1f%]/.test(executable)) throw new Error("Invalid desktop executable");
+  return executable;
+}
+async function resolveBrowserExecutable(executable, env, canAccess = (path) => access(path, constants.X_OK)) {
+  if (!executable || /[\x00-\x1f]/.test(executable)) throw new Error("Invalid executable");
+  const candidates = isAbsolute(executable) || win32.isAbsolute(executable) ? [executable] : (env.PATH || "").split(delimiter).filter(isAbsolute).map((directory) => join2(directory, executable));
   for (const candidate of candidates) {
     try {
-      await access(candidate, constants.X_OK);
+      await canAccess(candidate);
       return candidate;
     } catch {
     }
   }
-  throw new LeetCodeError("BROWSER_NOT_FOUND", "Install Chrome, Edge, or Chromium to use browser sign-in, or set LEETCODE_BROWSER_PATH to its executable. Manual local login remains available.");
+  throw new Error("Default browser executable unavailable");
+}
+async function defaultBrowserExecutable({
+  env = process.env,
+  platform = process.platform,
+  run = execute,
+  read = readFile2,
+  canAccess,
+  home = homedir2()
+} = {}) {
+  const options = { env, encoding: "utf8", timeout: 1e4, maxBuffer: 256 * 1024, windowsHide: true, shell: false };
+  let executable;
+  if (platform === "win32") {
+    const root = environmentValue(env, "SystemRoot");
+    if (!root || !win32.isAbsolute(root)) throw new Error("Windows directory unavailable");
+    const powershell = win32.join(root, "System32/WindowsPowerShell/v1.0/powershell.exe");
+    const { stdout } = await run(powershell, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", WINDOWS_DEFAULT], options);
+    executable = JSON.parse(stdout.trim()).path;
+  } else if (platform === "darwin") {
+    const { stdout } = await run("/usr/bin/osascript", ["-l", "JavaScript", "-e", MAC_DEFAULT], options);
+    executable = JSON.parse(stdout.trim()).path;
+  } else if (platform === "linux") {
+    const { stdout } = await run("xdg-settings", ["get", "default-web-browser"], options);
+    const desktopId = stdout.trim();
+    if (!/^[A-Za-z0-9_.-]+\.desktop$/.test(desktopId) || desktopId.startsWith(".")) throw new Error("Invalid default browser desktop ID");
+    const roots = [env.XDG_DATA_HOME || join2(home, ".local/share"), ...(env.XDG_DATA_DIRS || "/usr/local/share:/usr/share").split(":")].filter(isAbsolute);
+    for (const root of roots) {
+      let content;
+      try {
+        content = await read(join2(root, "applications", desktopId), "utf8");
+      } catch {
+        continue;
+      }
+      executable = desktopExecutable(content);
+      break;
+    }
+  } else throw new Error("Unsupported operating system");
+  return resolveBrowserExecutable(executable, env, canAccess);
+}
+function supportsBrowserSignIn(executable) {
+  const name = executable.replaceAll("\\", "/").split("/").pop().toLowerCase();
+  return /^(?:chrome|msedge|chromium|brave|vivaldi)(?:\.exe)?$/.test(name) || /^(?:google-chrome(?:-stable|-beta|-unstable)?|chromium-browser|microsoft-edge(?:-stable|-beta|-dev)?|brave-browser(?:-stable|-beta|-nightly)?|vivaldi-stable)$/.test(name) || ["google chrome", "google chrome beta", "google chrome dev", "google chrome canary", "microsoft edge", "microsoft edge beta", "microsoft edge dev", "brave browser"].includes(name);
+}
+
+// src/browser-login.mjs
+var LOGIN_URL = "https://leetcode.com/accounts/login/";
+var execute2 = promisify2(execFile2);
+async function stopProfileProcesses(profile, env) {
+  if (process.platform !== "win32") return;
+  const root = env[Object.keys(env).find((key) => key.toUpperCase() === "SYSTEMROOT")];
+  if (!root) return;
+  const script = String.raw`
+$expected = [System.IO.Path]::GetFullPath($env:LEETCODE_SIGNIN_PROFILE)
+Get-CimInstance Win32_Process -Filter "Name='chrome.exe' OR Name='msedge.exe' OR Name='brave.exe' OR Name='vivaldi.exe' OR Name='chromium.exe'" | Where-Object {
+  $match = [regex]::Match($_.CommandLine, '(?:^|\s)--user-data-dir=(?:"([^"]+)"|(\S+))')
+  if ($match.Success) {
+    $value = if ($match.Groups[1].Success) { $match.Groups[1].Value } else { $match.Groups[2].Value }
+    try { [string]::Equals([System.IO.Path]::GetFullPath($value), $expected, [System.StringComparison]::OrdinalIgnoreCase) } catch { $false }
+  }
+} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+`;
+  await execute2(
+    join3(root, "System32/WindowsPowerShell/v1.0/powershell.exe"),
+    ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
+    { env: { ...env, LEETCODE_SIGNIN_PROFILE: profile }, windowsHide: true, shell: false, timeout: 1e4 }
+  );
+}
+async function findBrowser(env = process.env, platform = process.platform, detect = defaultBrowserExecutable) {
+  let executable;
+  if (env.LEETCODE_BROWSER_PATH) {
+    if (!isAbsolute2(env.LEETCODE_BROWSER_PATH)) throw new LeetCodeError("BROWSER_NOT_FOUND", "LEETCODE_BROWSER_PATH must be an absolute browser executable path.");
+    try {
+      executable = await resolveBrowserExecutable(env.LEETCODE_BROWSER_PATH, env);
+    } catch {
+      throw new LeetCodeError("BROWSER_NOT_FOUND", "The configured browser executable is unavailable. Check LEETCODE_BROWSER_PATH.");
+    }
+  } else {
+    try {
+      executable = await detect({ env, platform });
+    } catch {
+      throw new LeetCodeError("DEFAULT_BROWSER_UNAVAILABLE", "Could not determine your default HTTPS browser. Check the operating system default-browser setting or set LEETCODE_BROWSER_PATH to a supported browser executable.");
+    }
+  }
+  if (!supportsBrowserSignIn(executable)) throw new LeetCodeError("UNSUPPORTED_BROWSER", "Your selected browser does not support this plugin's automatic sign-in connection. Use Chrome, Edge, Brave, Vivaldi, or Chromium as the default, or choose one explicitly with LEETCODE_BROWSER_PATH. Firefox, Safari, and sandboxed browser launchers are not supported by this adapter.");
+  return executable;
 }
 var DevToolsConnection = class _DevToolsConnection {
   constructor(socket, timeoutMs = 5e3) {
@@ -37042,14 +37154,21 @@ function credentialsFromCookies(cookies, now = Date.now()) {
   if (!values.has("LEETCODE_SESSION") || !values.has("csrftoken")) return null;
   return validateCredentials({ session: values.get("LEETCODE_SESSION"), csrf: values.get("csrftoken") });
 }
-async function launchSignInBrowser({ env = process.env, signal, startupTimeoutMs = 2e4 } = {}) {
+async function launchSignInBrowser({
+  env = process.env,
+  signal,
+  startupTimeoutMs = 2e4,
+  spawnBrowser = spawn,
+  connectBrowser = DevToolsConnection.open,
+  stopProfile = stopProfileProcesses
+} = {}) {
   const executable = await findBrowser(env);
   const profileRoot = resolve(dirname2(credentialPath(env)), "sign-in");
   await mkdir2(profileRoot, { recursive: true, mode: 448 });
-  const profile = await mkdtemp(join2(profileRoot, "login-"));
+  const profile = await mkdtemp(join3(profileRoot, "login-"));
   const profileRelative = relative(profileRoot, profile);
-  if (!profileRelative || profileRelative.startsWith("..") || isAbsolute(profileRelative)) throw new Error("Invalid sign-in profile path.");
-  const child = spawn(executable, [
+  if (!profileRelative || profileRelative.startsWith("..") || isAbsolute2(profileRelative)) throw new Error("Invalid sign-in profile path.");
+  const child = spawnBrowser(executable, [
     `--user-data-dir=${profile}`,
     "--remote-debugging-port=0",
     "--remote-debugging-address=127.0.0.1",
@@ -37057,13 +37176,16 @@ async function launchSignInBrowser({ env = process.env, signal, startupTimeoutMs
     "--no-default-browser-check",
     "--disable-sync",
     "--disable-extensions",
-    `--app=${LOGIN_URL}`
+    "--new-window",
+    LOGIN_URL
   ], { stdio: "ignore", windowsHide: false, shell: false });
   let exited = false;
+  let launchFailed = false;
   let closed = false;
   let connection;
   child.once("error", () => {
     exited = true;
+    launchFailed = true;
   });
   child.once("exit", () => {
     exited = true;
@@ -37072,15 +37194,15 @@ async function launchSignInBrowser({ env = process.env, signal, startupTimeoutMs
     const deadline = Date.now() + startupTimeoutMs;
     while (Date.now() < deadline) {
       signal?.throwIfAborted();
-      if (exited || closed) throw new Error("Sign-in window closed.");
+      if (launchFailed || closed) throw new Error("Sign-in window closed.");
       let endpoint;
       try {
-        const [port, browserPath] = (await readFile2(join2(profile, "DevToolsActivePort"), "utf8")).trim().split(/\r?\n/);
+        const [port, browserPath] = (await readFile3(join3(profile, "DevToolsActivePort"), "utf8")).trim().split(/\r?\n/);
         if (/^\d+$/.test(port) && Number(port) > 0 && Number(port) <= 65535 && /^\/devtools\/browser\/[A-Za-z0-9-]+$/.test(browserPath)) endpoint = `ws://127.0.0.1:${port}${browserPath}`;
       } catch {
       }
       if (endpoint) {
-        connection = await DevToolsConnection.open(endpoint, { signal });
+        connection = await connectBrowser(endpoint, { signal });
         return connection;
       }
       await delay(200, void 0, { signal });
@@ -37089,7 +37211,7 @@ async function launchSignInBrowser({ env = process.env, signal, startupTimeoutMs
   }
   return {
     async readCookies() {
-      if (closed || exited) throw new Error("Sign-in window closed.");
+      if (closed || launchFailed) throw new Error("Sign-in window closed.");
       const cdp = connection || await connect();
       return cdp.readLeetCodeCookies();
     },
@@ -37103,7 +37225,9 @@ async function launchSignInBrowser({ env = process.env, signal, startupTimeoutMs
       }
       for (let i = 0; i < 15 && !exited; i++) await delay(100);
       if (!exited) child.kill();
-      await rm2(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+      await stopProfile(profile, env).catch(() => {
+      });
+      await rm2(profile, { recursive: true, force: true, maxRetries: 2, retryDelay: 100 });
     }
   };
 }
@@ -37205,7 +37329,7 @@ var LoginManager = class {
 
 // src/server.mjs
 function createServer(client = new LeetCodeClient(), login = new LoginManager()) {
-  const server = new McpServer({ name: "leetcode-companion", version: "0.2.0" });
+  const server = new McpServer({ name: "leetcode-companion", version: "0.2.1" });
   server.server.onclose = () => {
     void login.cancel();
   };

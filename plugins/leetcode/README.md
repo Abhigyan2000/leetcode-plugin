@@ -14,7 +14,7 @@
   <a href="#install">Install</a> &nbsp;&middot;&nbsp;
   <a href="#connect-your-account">Connect your account</a> &nbsp;&middot;&nbsp;
   <a href="#tools">Tools</a> &nbsp;&middot;&nbsp;
-  <a href="https://github.com/Abhigyan2000/leetcode-plugin/releases/tag/v0.2.0">Download</a>
+  <a href="https://github.com/Abhigyan2000/leetcode-plugin/releases/tag/v0.2.1">Download</a>
 </p>
 
 </div>
@@ -25,7 +25,7 @@ The plugin runs on your computer and talks directly to LeetCode. Each person con
 
 ## Install
 
-You'll need **Node.js 22 or newer**, a desktop Codex client with plugin support, and Chrome, Edge, or Chromium for browser sign-in.
+You'll need **Node.js 22 or newer**, a desktop Codex client with plugin support, and a supported Chromium-based browser for sign-in: Chrome, Edge, Brave, Vivaldi, or Chromium.
 
 ```sh
 codex plugin marketplace add Abhigyan2000/leetcode-plugin --ref main
@@ -68,11 +68,13 @@ Run the plugin's **Setup** workflow, or ask Codex:
 
 > Connect my LeetCode account.
 
-1. The plugin opens [LeetCode's sign-in page](https://leetcode.com/accounts/login/) in a separate browser window.
+1. The plugin opens [LeetCode's sign-in page](https://leetcode.com/accounts/login/) in your default browser, with the address bar visible.
 2. Sign in and complete any verification there.
 3. Once LeetCode verifies your account, the plugin saves your session locally and closes the window. Codex can then report the connected username.
 
 No terminal commands or cookie copying are needed. The window uses a temporary browser profile, separate from your usual tabs and accounts. The plugin reads only the resulting LeetCode session cookies. It doesn't inspect passwords or sign-in fields.
+
+The default browser is read from your operating system's HTTPS association. If it isn't supported by the sign-in adapter, the plugin explains that instead of choosing a different browser. Firefox, Safari, and sandboxed launchers such as Flatpak aren't supported by this adapter. You can select a supported executable explicitly with `LEETCODE_BROWSER_PATH`.
 
 You can ask Codex to cancel a pending login or disconnect the saved account. Sign-in expires after five minutes. This is a local browser connection; no account credentials pass through a project-operated server.
 
@@ -95,11 +97,11 @@ You can also configure the MCP process environment:
 | `LEETCODE_SESSION` | Session cookie; overrides the saved account |
 | `LEETCODE_CSRFTOKEN` | Matching CSRF token, required to run or submit code |
 | `LEETCODE_CREDENTIALS_FILE` | Custom path for the local credentials file |
-| `LEETCODE_BROWSER_PATH` | Absolute path to a Chrome, Edge, or Chromium executable |
+| `LEETCODE_BROWSER_PATH` | Absolute path to a supported browser executable; overrides the system default |
 
 An environment session uses only its matching environment CSRF token. It never borrows one from the saved account. Credentials are reloaded for each operation, so refreshing the local file doesn't require a server restart.
 
-The plugin checks standard browser installation paths. On Linux, it also checks your executable search path. It doesn't download a browser. If sign-in is unavailable in your browser, manual local setup is still supported: open the installed `leetcode` plugin folder in your terminal and run:
+The plugin reads the default HTTPS association on Windows, Launch Services on macOS, and the default desktop browser on Linux. It doesn't download a browser. If sign-in is unavailable in your browser, manual local setup is still supported: open the installed `leetcode` plugin folder in your terminal and run:
 
 ```sh
 node scripts/auth.mjs login
@@ -175,7 +177,7 @@ This fetches Two Sum and the daily challenge without loading credentials. Authen
 
 ## Project status
 
-**v0.2.0 is an early release for leetcode.com.** Public problem reads have been verified against the live site. LeetCode's website APIs can change, sessions expire, and some requests may require a browser check. Complete those checks yourself in the sign-in window. The plugin doesn't bypass them or premium access restrictions.
+**v0.2.1 is an early release for leetcode.com.** Public problem reads have been verified against the live site. LeetCode's website APIs can change, sessions expire, and some requests may require a browser check. Complete those checks yourself in the sign-in window. The plugin doesn't bypass them or premium access restrictions.
 
 Distribution is through this GitHub marketplace and the release ZIP. The plugin isn't listed in OpenAI's public directory.
 

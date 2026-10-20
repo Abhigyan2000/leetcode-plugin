@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, chmod, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, writeFile, chmod, rm, mkdir, readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
-import { credentialsFromCookies, DevToolsConnection, findBrowser } from '../src/browser-login.mjs';
+import { EventEmitter } from 'node:events';
+import { credentialsFromCookies, DevToolsConnection, findBrowser, launchSignInBrowser } from '../src/browser-login.mjs';
 
 const pair = [
   { domain: '.leetcode.com', path: '/', name: 'LEETCODE_SESSION', value: 'fixture-session' },
@@ -23,22 +24,57 @@ test('only the two live, root-scoped LeetCode cookies can establish a connection
 test('browser selection accepts an explicit executable, not a shell command', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'leetcode-browser-path-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  const executable = join(directory, 'fixture browser');
+  const executable = join(directory, 'browser with spaces', 'chrome.exe');
+  await mkdir(dirname(executable), { recursive: true });
   await writeFile(executable, 'fixture');
   await chmod(executable, 0o700);
   assert.equal(await findBrowser({ LEETCODE_BROWSER_PATH: executable }), executable);
   await assert.rejects(() => findBrowser({ LEETCODE_BROWSER_PATH: 'chrome --some-flag' }), { code: 'BROWSER_NOT_FOUND' });
-  await assert.rejects(() => findBrowser({ PATH: '' }, 'linux'), { code: 'BROWSER_NOT_FOUND' });
+  await assert.rejects(() => findBrowser({}, 'linux', async () => { throw new Error('Not configured'); }), { code: 'DEFAULT_BROWSER_UNAVAILABLE' });
 });
 
-test('Windows browser discovery handles the casing preserved by environment copies', async t => {
-  const directory = await mkdtemp(join(tmpdir(), 'leetcode-windows-browser-'));
+test('browser selection uses the detected default instead of preferring another installed browser', async () => {
+  const edge = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+  assert.equal(await findBrowser({ ProgramFiles: 'C:\\Program Files' }, 'win32', async () => edge), edge);
+});
+
+test('an unsupported default does not silently fall back to Chrome', async () => {
+  await assert.rejects(() => findBrowser({}, 'win32', async () => 'C:\\Firefox\\firefox.exe'), { code: 'UNSUPPORTED_BROWSER' });
+});
+
+test('an exited browser launcher can hand off to a live sign-in window', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'leetcode-launcher-handoff-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  const executable = join(directory, 'Google/Chrome/Application/chrome.exe');
-  await mkdir(dirname(executable), { recursive: true });
+  const executable = join(directory, 'msedge.exe');
   await writeFile(executable, 'fixture');
   await chmod(executable, 0o700);
-  assert.equal(await findBrowser({ ProgramFiles: directory }, 'win32'), executable);
+  let profile;
+  let stopped;
+  const browser = await launchSignInBrowser({ env: { LEETCODE_BROWSER_PATH: executable, LEETCODE_CREDENTIALS_FILE: join(directory, 'credentials.json') },
+    spawnBrowser: (file, args) => {
+      assert.equal(file, executable);
+      assert.ok(args.includes('--new-window'));
+      assert.ok(args.includes('https://leetcode.com/accounts/login/'));
+      assert.ok(!args.some(arg => arg.startsWith('--app=')));
+      profile = args.find(arg => arg.startsWith('--user-data-dir=')).slice('--user-data-dir='.length);
+      const child = new EventEmitter();
+      child.kill = () => { throw new Error('The launcher has already exited'); };
+      setImmediate(() => {
+        child.emit('exit', 0);
+        void writeFile(join(profile, 'DevToolsActivePort'), '12345\n/devtools/browser/fixture\n');
+      });
+      return child;
+    },
+    connectBrowser: async endpoint => {
+      assert.equal(endpoint, 'ws://127.0.0.1:12345/devtools/browser/fixture');
+      return { readLeetCodeCookies: async () => pair, send: async () => ({}), close() {} };
+    },
+    stopProfile: async value => { stopped = value; },
+  });
+  assert.deepEqual(await browser.readCookies(), pair);
+  await browser.close();
+  assert.equal(stopped, profile);
+  await assert.rejects(() => readFile(join(profile, 'DevToolsActivePort')), { code: 'ENOENT' });
 });
 
 class Socket extends EventTarget {

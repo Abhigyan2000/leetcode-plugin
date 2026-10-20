@@ -22,7 +22,7 @@ export class LeetCodeClient {
   async request(path, { method = 'GET', body, credentials, mutation = false, referer = '/' } = {}) {
     if (!path.startsWith('/') || path.startsWith('//')) throw new Error('Invalid API path');
     const headers = { Accept: 'application/json', Referer: ORIGIN + referer,
-      'User-Agent': 'LeetCodeCompanion/0.2.0 (community desktop plugin)' };
+      'User-Agent': 'LeetCodeCompanion/0.2.1 (community desktop plugin)' };
     if (body) headers['Content-Type'] = 'application/json';
     if (credentials?.session) {
       headers.Cookie = `LEETCODE_SESSION=${credentials.session}` + (credentials.csrf ? `; csrftoken=${credentials.csrf}` : '');
