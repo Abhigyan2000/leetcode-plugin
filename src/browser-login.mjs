@@ -10,24 +10,28 @@ import { defaultBrowserExecutable, resolveBrowserExecutable, supportsBrowserSign
 const LOGIN_URL = 'https://leetcode.com/accounts/login/';
 const execute = promisify(execFile);
 
-async function stopProfileProcesses(profile, env) {
-  if (process.platform !== 'win32') return;
+async function profileProcesses(profile, env, stop = false) {
+  if (process.platform !== 'win32') return false;
   const root = env[Object.keys(env).find(key => key.toUpperCase() === 'SYSTEMROOT')];
-  if (!root) return;
+  if (!root) throw new Error('Windows directory unavailable');
   const script = String.raw`
 $expected = [System.IO.Path]::GetFullPath($env:LEETCODE_SIGNIN_PROFILE)
-Get-CimInstance Win32_Process -Filter "Name='chrome.exe' OR Name='msedge.exe' OR Name='brave.exe' OR Name='vivaldi.exe' OR Name='chromium.exe'" | Where-Object {
+$profileProcesses = @(Get-CimInstance Win32_Process -ErrorAction Stop -Filter "Name='chrome.exe' OR Name='msedge.exe' OR Name='brave.exe' OR Name='vivaldi.exe' OR Name='chromium.exe'" | Where-Object {
   $match = [regex]::Match($_.CommandLine, '(?:^|\s)--user-data-dir=(?:"([^"]+)"|(\S+))')
   if ($match.Success) {
     $value = if ($match.Groups[1].Success) { $match.Groups[1].Value } else { $match.Groups[2].Value }
     try { [string]::Equals([System.IO.Path]::GetFullPath($value), $expected, [System.StringComparison]::OrdinalIgnoreCase) } catch { $false }
   }
-} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+})
+if ($env:LEETCODE_SIGNIN_STOP -eq '1') { $profileProcesses | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } }
+@{ running = ($profileProcesses.Count -gt 0) } | ConvertTo-Json -Compress
 `;
-  await execute(join(root, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+  const { stdout } = await execute(join(root, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
     ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
-    { env: { ...env, LEETCODE_SIGNIN_PROFILE: profile }, windowsHide: true, shell: false, timeout: 10000 });
+    { env: { ...env, LEETCODE_SIGNIN_PROFILE: profile, LEETCODE_SIGNIN_STOP: stop ? '1' : '0' }, windowsHide: true, shell: false, timeout: 10000 });
+  return JSON.parse(stdout.trim()).running;
 }
+const stopProfileProcesses = (profile, env) => profileProcesses(profile, env, true);
 
 export async function findBrowser(env = process.env, platform = process.platform, detect = defaultBrowserExecutable) {
   let executable;
@@ -100,12 +104,12 @@ export class DevToolsConnection {
     });
   }
 
-  async readLeetCodeCookies() {
+  async readLeetCodeCookies({ allowBlank = false } = {}) {
     const { targetInfos = [] } = await this.send('Target.getTargets');
     for (const target of targetInfos) {
       let url;
       try { url = new URL(target.url); } catch { continue; }
-      if (target.type !== 'page' || url.origin !== 'https://leetcode.com') continue;
+      if (target.type !== 'page' || (url.origin !== 'https://leetcode.com' && !(allowBlank && target.url === 'about:blank'))) continue;
       const { sessionId } = await this.send('Target.attachToTarget', { targetId: target.targetId, flatten: true });
       try {
         const result = await this.send('Network.getCookies', { urls: ['https://leetcode.com/'] }, sessionId);
@@ -131,24 +135,33 @@ export function credentialsFromCookies(cookies, now = Date.now()) {
 }
 
 export async function launchSignInBrowser({ env = process.env, signal, startupTimeoutMs = 20000,
-  spawnBrowser = spawn, connectBrowser = DevToolsConnection.open, stopProfile = stopProfileProcesses } = {}) {
+  spawnBrowser = spawn, connectBrowser = DevToolsConnection.open, stopProfile = stopProfileProcesses,
+  isProfileRunning = profileProcesses } = {}) {
   const executable = await findBrowser(env);
   const profileRoot = resolve(dirname(credentialPath(env)), 'sign-in');
   await mkdir(profileRoot, { recursive: true, mode: 0o700 });
   const profile = await mkdtemp(join(profileRoot, 'login-'));
   const profileRelative = relative(profileRoot, profile);
   if (!profileRelative || profileRelative.startsWith('..') || isAbsolute(profileRelative)) throw new Error('Invalid sign-in profile path.');
-  const child = spawnBrowser(executable, [
-    `--user-data-dir=${profile}`, '--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1',
-    '--no-first-run', '--no-default-browser-check', '--disable-sync', '--disable-extensions',
-    '--new-window', LOGIN_URL,
-  ], { stdio: 'ignore', windowsHide: false, shell: false });
+  let child;
   let exited = false;
   let launchFailed = false;
   let closed = false;
   let connection;
-  child.once('error', () => { exited = true; launchFailed = true; });
-  child.once('exit', () => { exited = true; });
+  let capturing = false;
+  function startBrowser(extraArgs, url) {
+    exited = false;
+    launchFailed = false;
+    const current = spawnBrowser(executable, [
+      `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check',
+      ...extraArgs, '--new-window', url,
+    ], { stdio: 'ignore', windowsHide: false, shell: false });
+    child = current;
+    current.once('error', () => { if (child === current) { exited = true; launchFailed = true; } });
+    current.once('exit', () => { if (child === current) exited = true; });
+  }
+  // Human sign-in uses an ordinary browser launch, without a debugging port.
+  startBrowser([], LOGIN_URL);
   async function connect() {
     const deadline = Date.now() + startupTimeoutMs;
     while (Date.now() < deadline) {
@@ -167,10 +180,25 @@ export async function launchSignInBrowser({ env = process.env, signal, startupTi
   }
   return {
     browser: executable.replaceAll('\\', '/').split('/').pop(),
+    manualFirst: true,
     async readCookies() {
       if (closed || launchFailed) throw new Error('Sign-in window closed.');
+      if (!capturing) {
+        if (!exited) return [];
+        // A launcher can exit while the window it handed off remains open.
+        await delay(500, undefined, { signal });
+        if (await isProfileRunning(profile, env)) return [];
+        signal?.throwIfAborted();
+        if (closed) throw new Error('Sign-in cancelled.');
+        capturing = true;
+        // Reopen only our own closed profile. No login or challenge page loads
+        // during capture; Network.getCookies still requests only LeetCode URLs.
+        startBrowser(['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1'], 'about:blank');
+      }
       const cdp = connection || await connect();
-      return cdp.readLeetCodeCookies();
+      const cookies = await cdp.readLeetCodeCookies({ allowBlank: true });
+      if (!credentialsFromCookies(cookies)) throw new LeetCodeError('SIGN_IN_INCOMPLETE', 'The sign-in window closed without a saved LeetCode session. Sign in fully before closing it.');
+      return cookies;
     },
     async close() {
       if (closed) return;

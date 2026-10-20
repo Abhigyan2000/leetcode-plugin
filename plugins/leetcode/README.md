@@ -14,7 +14,7 @@
   <a href="#install">Install</a> &nbsp;&middot;&nbsp;
   <a href="#connect-your-account">Connect your account</a> &nbsp;&middot;&nbsp;
   <a href="#tools">Tools</a> &nbsp;&middot;&nbsp;
-  <a href="https://github.com/Abhigyan2000/leetcode-plugin/releases/tag/v0.2.4">Download</a>
+  <a href="https://github.com/Abhigyan2000/leetcode-plugin/tree/main/plugins/leetcode">Plugin files</a>
 </p>
 
 </div>
@@ -69,14 +69,12 @@ Run the plugin's **Setup** workflow, or ask Codex:
 > Connect my LeetCode account.
 
 1. Connect checks your saved account. If you're already signed in, it returns your username. Otherwise it opens [LeetCode's sign-in page](https://leetcode.com/accounts/login/) in your default browser, with the address bar visible. Repeated requests reuse a pending window.
-2. Sign in and complete any verification there.
-3. The plugin verifies and saves your session in the background, then closes the window. Continue with your next LeetCode request, or ask for your connection status to confirm the username.
+2. Sign in and complete verification normally. This window has no remote debugging connection. Once you are fully signed in, close that sign-in window.
+3. The plugin briefly reopens its profile on a blank page to capture only the saved LeetCode cookies, verifies and saves the session, then closes that window and removes the temporary profile. Continue with your next LeetCode request, or ask for your connection status to confirm the username.
 
 Connecting takes one tool call; no separate status check or progress polling is needed. Account tools verify identity themselves. Connection responses include the running plugin version and, while sign-in is pending, the selected browser. If you have just updated the plugin, restart your client to load the new server; downloading an update does not replace an already running server.
 
-The default sign-in flow needs no terminal commands or cookie copying. The window uses a temporary browser profile, separate from your usual tabs and accounts. The plugin reads only the resulting LeetCode session cookies. It doesn't inspect passwords or sign-in fields.
-
-If human verification loops in that window but succeeds in your normal browser, ask for **local setup**. The plugin opens a local form in your ordinary default browser. Sign in to LeetCode normally, then follow the page's instructions to copy `LEETCODE_SESSION` and `csrftoken` into the form. It verifies both values with LeetCode before saving and shows the connected username. This fallback runs inside the same plugin and needs no extension or separate install. Never paste session values into chat. A copied session can still be rejected by LeetCode's API checks; the page reports failure without replacing your saved account.
+No terminal commands or cookie copying are needed. The window uses a temporary browser profile, separate from your usual tabs and accounts. The plugin reads only the resulting LeetCode session cookies. It doesn't inspect passwords or sign-in fields.
 
 The default browser is read from your operating system's HTTPS association. On Windows, the plugin asks the shell for the current effective default rather than reading legacy registry preferences. If it isn't supported by the sign-in adapter, the plugin explains that instead of choosing a different browser. Firefox, Safari, and sandboxed launchers such as Flatpak aren't supported by this adapter. You can select a supported executable explicitly with `LEETCODE_BROWSER_PATH`.
 
@@ -181,7 +179,7 @@ This fetches Two Sum and the daily challenge without loading credentials. Authen
 
 ## Project status
 
-**v0.2.4 is an early release for leetcode.com.** Public problem reads have been verified against the live site. LeetCode's website APIs can change, sessions expire, and some requests may require a browser check. Complete those checks yourself in the sign-in window. The plugin doesn't bypass them or premium access restrictions.
+**v0.2.5 is an early release for leetcode.com.** Public problem reads have been verified against the live site. The current sign-in flow has been verified with Brave on Windows; other supported browsers still need live testing. LeetCode's website APIs can change, sessions expire, and some requests may require a browser check. Complete those checks yourself in the sign-in window. The plugin doesn't bypass them or premium access restrictions.
 
 Distribution is through this GitHub marketplace and the release ZIP. The plugin isn't listed in OpenAI's public directory.
 

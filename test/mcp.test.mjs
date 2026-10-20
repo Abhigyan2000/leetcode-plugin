@@ -102,13 +102,3 @@ test('denied sessions can be refreshed with one Connect call', async t => {
   assert.equal(JSON.parse(result.content[0].text).state, 'AWAITING_LOGIN');
   assert.equal(opened, 1);
 });
-
-test('local fallback can replace a pending automated window without credential arguments', async t => {
-  let selected;
-  const login = { status: () => ({ state: 'AWAITING_LOGIN', method: 'browser' }),
-    start: async method => { selected = method; return { state: 'AWAITING_LOGIN', method }; }, cancel: async () => {} };
-  const client = await connect(t, login);
-  const result = await client.callTool({ name: 'connect_account', arguments: { method: 'local' } });
-  assert.equal(selected, 'local');
-  assert.equal(JSON.parse(result.content[0].text).method, 'local');
-});

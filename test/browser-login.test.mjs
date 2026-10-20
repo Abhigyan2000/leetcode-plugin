@@ -42,7 +42,7 @@ test('an unsupported default does not silently fall back to Chrome', async () =>
   await assert.rejects(() => findBrowser({}, 'win32', async () => 'C:\\Firefox\\firefox.exe'), { code: 'UNSUPPORTED_BROWSER' });
 });
 
-test('an exited browser launcher can hand off to a live sign-in window', async t => {
+test('sign-in stays uninstrumented until its window closes, including launcher handoff', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'leetcode-launcher-handoff-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const executable = join(directory, 'msedge.exe');
@@ -50,31 +50,75 @@ test('an exited browser launcher can hand off to a live sign-in window', async t
   await chmod(executable, 0o700);
   let profile;
   let stopped;
+  let launches = 0;
+  let manualOpen = true;
   const browser = await launchSignInBrowser({ env: { LEETCODE_BROWSER_PATH: executable, LEETCODE_CREDENTIALS_FILE: join(directory, 'credentials.json') },
     spawnBrowser: (file, args) => {
+      launches++;
       assert.equal(file, executable);
       assert.ok(args.includes('--new-window'));
-      assert.ok(args.includes('https://leetcode.com/accounts/login/'));
+      if (launches === 1) {
+        assert.ok(args.includes('https://leetcode.com/accounts/login/'));
+        assert.ok(!args.some(arg => arg.startsWith('--remote-debugging')));
+        assert.ok(!args.includes('--disable-extensions'));
+      } else {
+        assert.ok(args.includes('about:blank'));
+        assert.ok(!args.includes('https://leetcode.com/accounts/login/'));
+        assert.ok(args.includes('--remote-debugging-port=0'));
+        assert.equal(args.find(arg => arg.startsWith('--user-data-dir=')), `--user-data-dir=${profile}`);
+      }
       assert.ok(!args.some(arg => arg.startsWith('--app=')));
       profile = args.find(arg => arg.startsWith('--user-data-dir=')).slice('--user-data-dir='.length);
       const child = new EventEmitter();
       child.kill = () => { throw new Error('The launcher has already exited'); };
       setImmediate(() => {
         child.emit('exit', 0);
-        void writeFile(join(profile, 'DevToolsActivePort'), '12345\n/devtools/browser/fixture\n');
+        if (launches === 2) void writeFile(join(profile, 'DevToolsActivePort'), '12345\n/devtools/browser/fixture\n');
       });
       return child;
     },
     connectBrowser: async endpoint => {
       assert.equal(endpoint, 'ws://127.0.0.1:12345/devtools/browser/fixture');
-      return { readLeetCodeCookies: async () => pair, send: async () => ({}), close() {} };
+      return { readLeetCodeCookies: async options => { assert.equal(options.allowBlank, true); return pair; }, send: async () => ({}), close() {} };
     },
+    isProfileRunning: async () => manualOpen,
     stopProfile: async value => { stopped = value; },
   });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(await browser.readCookies(), []);
+  assert.equal(launches, 1);
+  manualOpen = false;
   assert.deepEqual(await browser.readCookies(), pair);
+  assert.equal(launches, 2);
   await browser.close();
   assert.equal(stopped, profile);
   await assert.rejects(() => readFile(join(profile, 'DevToolsActivePort')), { code: 'ENOENT' });
+});
+
+test('cancelling during manual sign-in never starts session capture', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'leetcode-manual-cancel-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const executable = join(directory, 'chrome.exe');
+  await writeFile(executable, 'fixture');
+  await chmod(executable, 0o700);
+  let launches = 0;
+  let stopped = false;
+  const browser = await launchSignInBrowser({ env: { LEETCODE_BROWSER_PATH: executable, LEETCODE_CREDENTIALS_FILE: join(directory, 'credentials.json') },
+    spawnBrowser: () => {
+      launches++;
+      const child = new EventEmitter();
+      child.kill = () => { child.emit('exit', 0); };
+      setImmediate(() => child.emit('exit', 0));
+      return child;
+    },
+    isProfileRunning: async () => true,
+    connectBrowser: async () => { throw new Error('Must not connect during manual sign-in'); },
+    stopProfile: async () => { stopped = true; },
+  });
+  assert.deepEqual(await browser.readCookies(), []);
+  await browser.close();
+  assert.equal(launches, 1);
+  assert.equal(stopped, true);
 });
 
 class Socket extends EventTarget {
@@ -116,6 +160,20 @@ test('being on an identity-provider page does not expose its cookies', async () 
   const connection = new DevToolsConnection(socket);
   assert.deepEqual(await connection.readLeetCodeCookies(), []);
   assert.equal(socket.sent.length, 1);
+  connection.close();
+});
+
+test('post-login capture reads only LeetCode cookies from an owned blank page', async () => {
+  const socket = new Socket(command => {
+    if (command.method === 'Target.getTargets') return { result: { targetInfos: [{ type: 'page', targetId: 'capture', url: 'about:blank' }] } };
+    if (command.method === 'Target.attachToTarget') return { result: { sessionId: 'capture-session' } };
+    if (command.method === 'Network.getCookies') return { result: { cookies: pair } };
+    return { result: {} };
+  });
+  const connection = new DevToolsConnection(socket);
+  assert.deepEqual(await connection.readLeetCodeCookies({ allowBlank: true }), pair);
+  assert.deepEqual(socket.sent.find(command => command.method === 'Network.getCookies').params, { urls: ['https://leetcode.com/'] });
+  assert.ok(!socket.sent.some(command => /navigate|evaluate|getAllCookies|Storage.getCookies/i.test(command.method)));
   connection.close();
 });
 

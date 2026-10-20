@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { LeetCodeClient, LeetCodeError } from './client.mjs';
 import { LoginManager } from './login-manager.mjs';
 
-const VERSION = '0.2.4';
+const VERSION = '0.2.5';
 
 export function createServer(client = new LeetCodeClient(), login = new LoginManager()) {
   const server = new McpServer({ name: 'leetcode-companion', version: VERSION });
@@ -33,9 +33,9 @@ export function createServer(client = new LeetCodeClient(), login = new LoginMan
     if (pending.state === 'AWAITING_LOGIN') return accountResult({ connected: false, login: pending });
     return accountResult({ ...await client.authStatus(), login: login.status() });
   });
-  tool('connect_account', 'Connect once; no auth_status prerequisite or progress polling. Default browser method uses a temporary sign-in profile. If verification fails there but works in the normal browser, use method local: opens a local form for the user to paste session values privately. Never put cookies in tool arguments or chat.', { method: z.enum(['browser', 'local']).default('browser') }, async ({ method }) => {
+  tool('connect_account', 'Connect once without a prior status check. Opens an ordinary temporary browser profile with debugging off. The user signs in and closes that window; only then the plugin captures the LeetCode session and verifies it. No agent polling needed.', {}, async () => {
     const pending = login.status();
-    if (pending.state === 'AWAITING_LOGIN' && (pending.method || 'browser') === method) return accountResult(pending);
+    if (pending.state === 'AWAITING_LOGIN') return accountResult(pending);
     let current;
     try { current = await client.authStatus(); }
     catch (error) {
@@ -43,7 +43,7 @@ export function createServer(client = new LeetCodeClient(), login = new LoginMan
       if (!(error instanceof LeetCodeError) || !['ACCESS_DENIED', 'SESSION_EXPIRED'].includes(error.code)) throw error;
     }
     if (current?.connected) return accountResult({ state: 'CONNECTED', connected: true, username: current.username, canSubmit: current.canSubmit });
-    return accountResult(await login.start(method));
+    return accountResult(await login.start());
   }, true);
   tool('cancel_login', 'Close a pending browser sign-in window and remove its temporary profile. Does not remove previously saved credentials.', {}, () => login.cancel(), true);
   tool('disconnect_account', 'Cancel pending browser sign-in and remove this plugin\'s saved local LeetCode credentials. Does not revoke browser sessions or unset environment overrides.', {}, () => login.disconnect(), true);
