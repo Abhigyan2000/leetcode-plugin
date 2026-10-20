@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createServer } from '../src/server.mjs';
-import { LeetCodeClient } from '../src/client.mjs';
+import { LeetCodeClient, LeetCodeError } from '../src/client.mjs';
 
-async function connect(t, login) {
-  const server = createServer(new LeetCodeClient({ credentials: async () => ({ source: 'none' }),
+async function connect(t, login, accountClient) {
+  const server = createServer(accountClient || new LeetCodeClient({ credentials: async () => ({ source: 'none' }),
     fetchImpl: async () => { throw new Error('Network should not be used'); } }), login);
   const client = new Client({ name: 'fixture-client', version: '1.0.0' });
   const [a, b] = InMemoryTransport.createLinkedPair();
@@ -53,4 +53,52 @@ test('MCP setup opens a browser connection without asking for credential argumen
   assert.equal(opened, 1);
   const status = await client.callTool({ name: 'auth_status', arguments: {} });
   assert.equal(JSON.parse(status.content[0].text).connected, false);
+});
+
+test('one Connect call verifies an existing account without opening a browser', async t => {
+  let checks = 0;
+  const login = { status: () => ({ state: 'IDLE' }), start: () => { throw new Error('Must not open a browser'); }, cancel: async () => {} };
+  const client = await connect(t, login, { authStatus: async () => {
+    checks++;
+    return { connected: true, username: 'personal-user', canSubmit: true };
+  } });
+  const result = JSON.parse((await client.callTool({ name: 'connect_account', arguments: {} })).content[0].text);
+  assert.equal(result.state, 'CONNECTED');
+  assert.equal(result.username, 'personal-user');
+  assert.equal(result.canSubmit, true);
+  assert.equal(result.pluginVersion, client.getServerVersion().version);
+  assert.equal(checks, 1);
+});
+
+test('pending Connect and status calls reuse the window without network verification', async t => {
+  const login = { status: () => ({ state: 'AWAITING_LOGIN', browser: 'brave.exe', profile: 'temporary' }),
+    start: () => { throw new Error('Must reuse the window'); }, cancel: async () => {} };
+  const client = await connect(t, login, { authStatus: () => { throw new Error('Must not contact LeetCode'); } });
+  const result = JSON.parse((await client.callTool({ name: 'connect_account', arguments: {} })).content[0].text);
+  assert.equal(result.state, 'AWAITING_LOGIN');
+  assert.equal(result.browser, 'brave.exe');
+  assert.equal(result.pluginVersion, client.getServerVersion().version);
+  const status = JSON.parse((await client.callTool({ name: 'auth_status', arguments: {} })).content[0].text);
+  assert.equal(status.login.state, 'AWAITING_LOGIN');
+});
+
+test('network and rate-limit errors do not open another login window', async t => {
+  let opened = 0;
+  const login = { status: () => ({ state: 'IDLE' }), start: async () => { opened++; }, cancel: async () => {} };
+  for (const code of ['NETWORK_ERROR', 'RATE_LIMITED', 'UPSTREAM_ERROR']) {
+    const client = await connect(t, login, { authStatus: async () => { throw new LeetCodeError(code, 'Try later'); } });
+    const result = await client.callTool({ name: 'connect_account', arguments: {} });
+    assert.equal(result.isError, true);
+    assert.equal(JSON.parse(result.content[0].text).code, code);
+  }
+  assert.equal(opened, 0);
+});
+
+test('denied sessions can be refreshed with one Connect call', async t => {
+  let opened = 0;
+  const login = { status: () => ({ state: 'IDLE' }), start: async () => { opened++; return { state: 'AWAITING_LOGIN' }; }, cancel: async () => {} };
+  const client = await connect(t, login, { authStatus: async () => { throw new LeetCodeError('ACCESS_DENIED', 'Sign in'); } });
+  const result = await client.callTool({ name: 'connect_account', arguments: {} });
+  assert.equal(JSON.parse(result.content[0].text).state, 'AWAITING_LOGIN');
+  assert.equal(opened, 1);
 });

@@ -84,7 +84,7 @@ var LeetCodeClient = class {
     const headers = {
       Accept: "application/json",
       Referer: ORIGIN + referer,
-      "User-Agent": "LeetCodeCompanion/0.2.2 (community desktop plugin)"
+      "User-Agent": "LeetCodeCompanion/0.2.3 (community desktop plugin)"
     };
     if (body) headers["Content-Type"] = "application/json";
     if (credentials?.session) {

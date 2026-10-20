@@ -14,7 +14,7 @@
   <a href="#install">Install</a> &nbsp;&middot;&nbsp;
   <a href="#connect-your-account">Connect your account</a> &nbsp;&middot;&nbsp;
   <a href="#tools">Tools</a> &nbsp;&middot;&nbsp;
-  <a href="https://github.com/Abhigyan2000/leetcode-plugin/releases/tag/v0.2.2">Download</a>
+  <a href="https://github.com/Abhigyan2000/leetcode-plugin/releases/tag/v0.2.3">Download</a>
 </p>
 
 </div>
@@ -68,9 +68,11 @@ Run the plugin's **Setup** workflow, or ask Codex:
 
 > Connect my LeetCode account.
 
-1. The plugin opens [LeetCode's sign-in page](https://leetcode.com/accounts/login/) in your default browser, with the address bar visible.
+1. Connect checks your saved account. If you're already signed in, it returns your username. Otherwise it opens [LeetCode's sign-in page](https://leetcode.com/accounts/login/) in your default browser, with the address bar visible. Repeated requests reuse a pending window.
 2. Sign in and complete any verification there.
-3. Once LeetCode verifies your account, the plugin saves your session locally and closes the window. Codex can then report the connected username.
+3. The plugin verifies and saves your session in the background, then closes the window. Continue with your next LeetCode request, or ask for your connection status to confirm the username.
+
+Connecting takes one tool call; no separate status check or progress polling is needed. Account tools verify identity themselves. Connection responses include the running plugin version and, while sign-in is pending, the selected browser. If you have just updated the plugin, restart your client to load the new server; downloading an update does not replace an already running server.
 
 No terminal commands or cookie copying are needed. The window uses a temporary browser profile, separate from your usual tabs and accounts. The plugin reads only the resulting LeetCode session cookies. It doesn't inspect passwords or sign-in fields.
 
@@ -177,7 +179,7 @@ This fetches Two Sum and the daily challenge without loading credentials. Authen
 
 ## Project status
 
-**v0.2.2 is an early release for leetcode.com.** Public problem reads have been verified against the live site. LeetCode's website APIs can change, sessions expire, and some requests may require a browser check. Complete those checks yourself in the sign-in window. The plugin doesn't bypass them or premium access restrictions.
+**v0.2.3 is an early release for leetcode.com.** Public problem reads have been verified against the live site. LeetCode's website APIs can change, sessions expire, and some requests may require a browser check. Complete those checks yourself in the sign-in window. The plugin doesn't bypass them or premium access restrictions.
 
 Distribution is through this GitHub marketplace and the release ZIP. The plugin isn't listed in OpenAI's public directory.
 

@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "leetcode",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Read your LeetCode progress and submissions, practice problems, run code, and submit solutions from your own account.",
   "author": { "name": "Abhigyan2000", "url": "https://github.com/Abhigyan2000" },
   "repository": "https://github.com/Abhigyan2000/leetcode-plugin",

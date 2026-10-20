@@ -3,11 +3,13 @@ name: setup
 description: Open LeetCode's browser sign-in window, verify the connected account, or disconnect this plugin.
 ---
 
-Call `auth_status` first. It reports configuration and verifies the account without returning credentials. If connected, show the username and finish unless the user requested a change.
+For a connection request, call `connect_account` directly once. It verifies an existing account, reuses a pending sign-in, or opens LeetCode's real sign-in page in the default supported browser. Do not call `auth_status` first, inspect processes, or run a separate setup script.
 
-If setup is needed, use `connect_account`. It opens LeetCode's real sign-in page in the user's default supported browser with the address bar visible. Tell the user to sign in and complete any verification themselves. Do not inspect login fields or offer to enter credentials. The plugin reads only the resulting LeetCode session cookies, verifies the account, and saves them in local application data. Cookies and passwords must never appear in chat or tool arguments.
+If `CONNECTED` is returned, report the verified username and finish. If `AWAITING_LOGIN` is returned, briefly ask the user to sign in in the returned browser. The visible window uses a separate temporary profile; it does not reuse their normal browser login. The plugin handles waiting, verification, saving, and cleanup in the background. The window closes on completion. Do not poll, wait in tools, or reopen it while pending.
 
-Use `auth_status` to check completion after the user signs in. `connected: true` and the returned username establish the active account; a pending browser window or configured cookie alone does not. While sign-in is pending, allow the user time to act; do not poll continuously or block them with long tool waits. `cancel_login` closes a pending window. If they close the window, cancel, or sign-in expires, offer another attempt only when requested.
+Use `auth_status` once if the user asks for connection status or says they finished sign-in. Otherwise, proceed directly with the next requested LeetCode tool; account tools verify identity themselves. Never infer connection from a pending window. On failure, expiry, or cancellation, retry only when requested. `cancel_login` closes a pending window.
+
+Account responses include `pluginVersion` from the running server. Use that to diagnose a stale version only when needed; an installed update alone does not prove the live server changed. Never inspect login fields, enter credentials, or expose cookies in chat.
 
 To disconnect, call `disconnect_account`. To switch an already connected account, disconnect it before opening a new sign-in window. Environment overrides must be unset locally; the plugin will not mix an environment account with a new saved account. Expired sessions can be refreshed through `connect_account`.
 

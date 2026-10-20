@@ -3,7 +3,7 @@ name: practice
 description: Use this plugin to inspect LeetCode progress and submission history, explain or practice problems, run code, and submit a user's solution.
 ---
 
-Use `get_profile`, `get_problem`, and `get_daily_challenge` for public information. Use `auth_status` before account-specific work to verify which account is connected. Do not use GitHub identity as LeetCode identity.
+Use `get_profile`, `get_problem`, and `get_daily_challenge` for public information. Call account-specific tools directly: they verify the account and return its username. Do not precede them with `auth_status` unless the user asks which account is connected. Do not use GitHub identity as LeetCode identity.
 
 `list_solved_problems` and `list_submissions` return one page. Follow their pagination when the user requests the complete history, and distinguish an individual submission from a unique solved problem. `get_submission` retrieves saved code and judge details.
 

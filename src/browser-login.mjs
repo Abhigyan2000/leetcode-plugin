@@ -166,6 +166,7 @@ export async function launchSignInBrowser({ env = process.env, signal, startupTi
     throw new Error('The sign-in browser did not start.');
   }
   return {
+    browser: executable.replaceAll('\\', '/').split('/').pop(),
     async readCookies() {
       if (closed || launchFailed) throw new Error('Sign-in window closed.');
       const cdp = connection || await connect();

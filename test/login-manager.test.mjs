@@ -34,10 +34,12 @@ test('browser connection saves only a verified session and returns no credential
 test('repeated Connect requests reuse one pending browser window', async () => {
   let closed = 0;
   let launches = 0;
-  const { manager } = fixture({ launch: async () => { launches++; return { readCookies: async () => [], close: async () => { closed++; } }; } });
+  const { manager } = fixture({ launch: async () => { launches++; return { browser: 'brave.exe', readCookies: async () => [], close: async () => { closed++; } }; } });
   const statuses = await Promise.all([manager.start(), manager.start(), manager.start()]);
   assert.ok(statuses.every(status => status.state === 'AWAITING_LOGIN'));
   assert.equal(launches, 1);
+  assert.equal(statuses[0].browser, 'brave.exe');
+  assert.equal(statuses[0].profile, 'temporary');
   await manager.start();
   assert.equal(launches, 1);
   await manager.cancel();

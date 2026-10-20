@@ -33,7 +33,9 @@ export class LoginManager {
     if (this.task) await this.task;
     this.controller = new AbortController();
     const browser = await this.launch({ env: this.env, signal: this.controller.signal });
-    this.state = { state: 'AWAITING_LOGIN', message: 'Sign in on leetcode.com in the new window. Complete any verification yourself. The plugin will verify and save your LeetCode session locally, then close this window. Use auth_status to check progress.', expiresAt: new Date(Date.now() + this.timeoutMs).toISOString() };
+    this.state = { state: 'AWAITING_LOGIN', browser: browser.browser, profile: 'temporary',
+      message: 'Sign in in the browser window. The plugin verifies and saves your session in the background, then closes the window. No progress checks are needed.',
+      expiresAt: new Date(Date.now() + this.timeoutMs).toISOString() };
     this.task = this.observe(browser, this.controller.signal);
     return this.status();
   }

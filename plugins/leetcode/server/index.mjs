@@ -36729,7 +36729,7 @@ var LeetCodeClient = class {
     const headers = {
       Accept: "application/json",
       Referer: ORIGIN + referer,
-      "User-Agent": "LeetCodeCompanion/0.2.2 (community desktop plugin)"
+      "User-Agent": "LeetCodeCompanion/0.2.3 (community desktop plugin)"
     };
     if (body) headers["Content-Type"] = "application/json";
     if (credentials?.session) {
@@ -37225,6 +37225,7 @@ async function launchSignInBrowser({
     throw new Error("The sign-in browser did not start.");
   }
   return {
+    browser: executable.replaceAll("\\", "/").split("/").pop(),
     async readCookies() {
       if (closed || launchFailed) throw new Error("Sign-in window closed.");
       const cdp = connection || await connect();
@@ -37287,7 +37288,13 @@ var LoginManager = class {
     if (this.task) await this.task;
     this.controller = new AbortController();
     const browser = await this.launch({ env: this.env, signal: this.controller.signal });
-    this.state = { state: "AWAITING_LOGIN", message: "Sign in on leetcode.com in the new window. Complete any verification yourself. The plugin will verify and save your LeetCode session locally, then close this window. Use auth_status to check progress.", expiresAt: new Date(Date.now() + this.timeoutMs).toISOString() };
+    this.state = {
+      state: "AWAITING_LOGIN",
+      browser: browser.browser,
+      profile: "temporary",
+      message: "Sign in in the browser window. The plugin verifies and saves your session in the background, then closes the window. No progress checks are needed.",
+      expiresAt: new Date(Date.now() + this.timeoutMs).toISOString()
+    };
     this.task = this.observe(browser, this.controller.signal);
     return this.status();
   }
@@ -37343,8 +37350,9 @@ var LoginManager = class {
 };
 
 // src/server.mjs
+var VERSION = "0.2.3";
 function createServer(client = new LeetCodeClient(), login = new LoginManager()) {
-  const server = new McpServer({ name: "leetcode-companion", version: "0.2.2" });
+  const server = new McpServer({ name: "leetcode-companion", version: VERSION });
   server.server.onclose = () => {
     void login.cancel();
   };
@@ -37370,23 +37378,23 @@ function createServer(client = new LeetCodeClient(), login = new LoginManager())
       }
     );
   }
-  tool("auth_status", "Verify the locally configured LeetCode account and report browser sign-in progress without returning credentials.", {}, async () => {
-    try {
-      return { ...await client.authStatus(), login: login.status() };
-    } catch (error62) {
-      if (login.status().state === "AWAITING_LOGIN") return { connected: false, login: login.status() };
-      throw error62;
-    }
+  const accountResult = (result) => ({ ...result, pluginVersion: VERSION });
+  tool("auth_status", "Report account status when asked or once after the user finishes sign-in. Not a prerequisite for Connect or account tools. Returns the running plugin version; never poll for browser progress.", {}, async () => {
+    const pending = login.status();
+    if (pending.state === "AWAITING_LOGIN") return accountResult({ connected: false, login: pending });
+    return accountResult({ ...await client.authStatus(), login: login.status() });
   });
-  tool("connect_account", "Open the real LeetCode sign-in page in a separate local Chrome/Edge/Chromium window. The user signs in; the plugin saves the verified LeetCode session locally. No credentials should be entered in chat. Returns immediately; check auth_status for completion.", {}, async () => {
-    if (login.status().state === "AWAITING_LOGIN") return login.status();
+  tool("connect_account", "Connect in one call: return the verified account, reuse a pending sign-in, or open LeetCode in the default supported browser with a temporary profile. Do not call auth_status first. The plugin verifies and saves sign-in in the background; no agent polling needed.", {}, async () => {
+    const pending = login.status();
+    if (pending.state === "AWAITING_LOGIN") return accountResult(pending);
     let current;
     try {
       current = await client.authStatus();
-    } catch {
+    } catch (error62) {
+      if (!(error62 instanceof LeetCodeError) || !["ACCESS_DENIED", "SESSION_EXPIRED"].includes(error62.code)) throw error62;
     }
-    if (current?.connected) return { state: "CONNECTED", username: current.username, message: "This account is already connected. To switch accounts, use disconnect_account, then connect_account." };
-    return login.start();
+    if (current?.connected) return accountResult({ state: "CONNECTED", connected: true, username: current.username, canSubmit: current.canSubmit });
+    return accountResult(await login.start());
   }, true);
   tool("cancel_login", "Close a pending browser sign-in window and remove its temporary profile. Does not remove previously saved credentials.", {}, () => login.cancel(), true);
   tool("disconnect_account", "Cancel pending browser sign-in and remove this plugin's saved local LeetCode credentials. Does not revoke browser sessions or unset environment overrides.", {}, () => login.disconnect(), true);

@@ -1,6 +1,6 @@
 {
   "name": "leetcode-plugin",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "type": "module",
   "description": "A desktop agent plugin for LeetCode progress, practice, and submissions.",
