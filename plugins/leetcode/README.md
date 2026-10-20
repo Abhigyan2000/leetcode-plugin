@@ -1,87 +1,146 @@
-# LeetCode Companion
+<div align="center">
 
-A free, open-source **desktop agent plugin** for using your LeetCode account from Codex. The plugin bundles a local MCP server and setup/practice skills. It reads your progress and submission history, fetches problems, runs code, and submits solutions when you ask.
+<h1>LeetCode Companion</h1>
 
-Community project; not affiliated with or endorsed by LeetCode or OpenAI. Version 0.1.0 targets **leetcode.com**. LeetCode's website APIs are not a stable public contract: they may change or require a browser check. No premium access or site checks are bypassed.
+<p>Practice LeetCode from Codex, with your own account and submission history.</p>
+
+<p>
+  <a href="https://github.com/Abhigyan2000/leetcode-plugin/actions/workflows/ci.yml"><img src="https://github.com/Abhigyan2000/leetcode-plugin/actions/workflows/ci.yml/badge.svg" alt="Build and tests"></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-22%2B-475569" alt="Node.js 22 or newer"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-475569" alt="MIT license"></a>
+</p>
+
+<p>
+  <a href="#install">Install</a> &nbsp;&middot;&nbsp;
+  <a href="#connect-your-account">Connect your account</a> &nbsp;&middot;&nbsp;
+  <a href="#tools">Tools</a> &nbsp;&middot;&nbsp;
+  <a href="https://github.com/Abhigyan2000/leetcode-plugin/releases/tag/v0.1.0">Download</a>
+</p>
+
+</div>
+
+Look up a problem, revisit an old submission, or test the solution you're working on. LeetCode Companion gives Codex access to your progress and saved code, with tools to submit a solution when you ask.
+
+The plugin runs on your computer and talks directly to LeetCode. Each person connects their own account. The server, its dependencies, and the setup and practice skills are bundled together.
 
 ## Install
 
-Requires **Node.js 22 or newer** and a desktop Codex client with plugin support. No hosting, database, paid API key, or npm runtime installation is required. The server and its JavaScript dependencies are bundled in the repository and release ZIP.
-
-Add the repository as a plugin marketplace:
+You'll need **Node.js 22 or newer** and a desktop Codex client with plugin support.
 
 ```sh
 codex plugin marketplace add Abhigyan2000/leetcode-plugin --ref main
 ```
 
-Restart the desktop app, open the Plugins directory, select **Abhigyan's LeetCode Plugin**, and install **LeetCode Companion**. Run its setup workflow. These steps follow the [official plugin packaging and marketplace documentation](https://developers.openai.com/plugins/build/plugins). Client availability and UI can vary by version.
+Restart the desktop app. In the Plugins directory, choose **Abhigyan's LeetCode Plugin** and install **LeetCode Companion**. Run the plugin's setup workflow to connect your account.
 
-For a local checkout, use `codex plugin marketplace add /absolute/path/to/leetcode-plugin` instead. The marketplace lives at `.agents/plugins/marketplace.json` and points to `plugins/leetcode/`. A marketplace makes the plugin discoverable; it does not install or authenticate it automatically.
+The plugin is free to use and runs locally, so there's no backend to host or paid API key to configure. See the [Codex plugin documentation](https://developers.openai.com/plugins/build/plugins) for marketplace setup details.
 
-If your client supports MCP but not plugin marketplaces, configure a local stdio server with command `node` and args `["/absolute/path/to/leetcode-plugin/plugins/leetcode/server/index.mjs"]`. The bundled practice/setup skills are available only when installed as a plugin.
+<details>
+<summary>Local checkout and other MCP clients</summary>
+
+To use a checkout as the marketplace source:
+
+```sh
+git clone https://github.com/Abhigyan2000/leetcode-plugin.git
+codex plugin marketplace add ./leetcode-plugin
+```
+
+For an MCP client without plugin support, register the bundled server as a stdio connection:
+
+```json
+{
+  "mcpServers": {
+    "leetcode": {
+      "command": "node",
+      "args": ["/absolute/path/to/leetcode-plugin/plugins/leetcode/server/index.mjs"]
+    }
+  }
+}
+```
+
+Adjust the configuration wrapper to match your client. A direct MCP connection provides the tools; install the plugin to get the setup and practice skills as well.
+
+</details>
 
 ## Connect your account
 
-In **your own interactive terminal**, open the installed `leetcode` plugin directory (or `plugins/leetcode` in this checkout) and run:
+The plugin uses cookies from your signed-in LeetCode session. Open the installed `leetcode` plugin folder in your terminal, or `plugins/leetcode` if you're working from a checkout, and run:
 
 ```sh
 node scripts/auth.mjs login
 ```
 
-Sign in at `https://leetcode.com` in your browser. Open Developer Tools > Application (or Storage) > Cookies > `https://leetcode.com`. Copy the values of **LEETCODE_SESSION** and **csrftoken** into the script's hidden prompts. Do not paste them into a chat, issue, screenshot, or command-line argument. This is local session-cookie setup, not OAuth or an official LeetCode account-linking flow.
+1. Sign in to [leetcode.com](https://leetcode.com) in your browser.
+2. Open Developer Tools, then **Application** or **Storage**, and find the cookies for `https://leetcode.com`.
+3. Copy `LEETCODE_SESSION` and `csrftoken` into the terminal's hidden prompts.
 
-The script verifies the session before saving it. Credentials are stored outside the repository and installed plugin:
+Login verifies your session before saving it and prints the connected username. Cookies stay in a local credentials file outside the repository. Keep them out of chat messages, issues, and command-line arguments.
 
-| Platform | Default credential file |
+The credentials file is **plaintext**. It uses owner-only permissions on POSIX and your user profile's inherited permissions on Windows. See [Security](SECURITY.md) for details.
+
+<details>
+<summary>Credential storage, environment variables, and logout</summary>
+
+Default storage locations:
+
+| Platform | Credential file |
 | --- | --- |
 | Windows | `%LOCALAPPDATA%/leetcode-plugin/credentials.json` |
-| Linux/macOS | `$XDG_CONFIG_HOME/leetcode-plugin/credentials.json`, falling back to `~/.config/leetcode-plugin/credentials.json` |
+| Linux / macOS | `$XDG_CONFIG_HOME/leetcode-plugin/credentials.json`, or `~/.config/leetcode-plugin/credentials.json` |
 
-The file is plaintext. New directories/files use owner-only permissions on POSIX; on Windows, access follows your user profile's inherited ACLs. Keep the application-data directory private. This version does not use an OS keychain.
+You can also configure the MCP process environment:
 
-Advanced: provide `LEETCODE_SESSION` and `LEETCODE_CSRFTOKEN` through your local MCP process environment instead, or override the file path using `LEETCODE_CREDENTIALS_FILE`. An environment session replaces the entire saved identity; its CSRF token is never taken from another account's file. The server reloads credentials for each operation, so a running server can pick up a refreshed local file.
+| Variable | Purpose |
+| --- | --- |
+| `LEETCODE_SESSION` | Session cookie; overrides the saved account |
+| `LEETCODE_CSRFTOKEN` | Matching CSRF token, required to run or submit code |
+| `LEETCODE_CREDENTIALS_FILE` | Custom path for the local credentials file |
 
-Use the plugin's `auth_status` tool to verify the connected username. To inspect local configuration or remove saved credentials:
+An environment session uses only its matching environment CSRF token. It never borrows one from the saved account. Credentials are reloaded for each operation, so refreshing the local file doesn't require a server restart.
+
+To check local configuration or remove saved credentials:
 
 ```sh
 node scripts/auth.mjs status
 node scripts/auth.mjs logout
 ```
 
-Logout removes the local file; unset environment overrides separately. It does not revoke the browser session. If exposed, revoke that session through LeetCode. When a session expires, run login again.
+Use the `auth_status` tool in Codex to verify the account with LeetCode. Run login again when the session expires. Logout deletes the saved file; unset any environment overrides separately. It does not revoke your browser session.
 
-## Use it
+</details>
 
-- "Show my solved problems and suggest what to practice next."
-- "Look at my submissions for Two Sum and explain what improved."
-- "Give me a hint for today's daily challenge."
-- "Run this Python solution on the examples."
-- "Submit this solution in Python 3 and check the result."
+## Working with the plugin
 
-| Tool | Account required | Effect |
-| --- | --- | --- |
-| `auth_status` | Optional | Verify locally configured account, never return cookies |
-| `get_profile` | No | Public profile and solved counts |
-| `get_problem` | Optional | Problem statement, hints, tags, language templates |
-| `get_daily_challenge` | No | Current challenge |
-| `list_solved_problems` | Yes | Paginated unique solved problems |
-| `list_submissions` | Yes | Paginated submission history, optionally one problem |
-| `get_submission` | Yes | Saved source code and judge details |
-| `run_code` | Yes, plus CSRF | Start a test run on LeetCode |
-| `submit_solution` | Yes, plus CSRF | Submit code to the judge and add to account history |
-| `check_result` | Yes | Check an existing judge ID |
+Ask Codex for the task you have in mind:
 
-Running/submitting returns a `judgeId` immediately. Check that ID until the judge finishes. A timeout or malformed write response can mean the operation was received: check history before retrying. The server never automatically repeats a submission. "Submit" sends code for evaluation; publishing a community solution article is not implemented.
+> Show my solved medium problems tagged with dynamic programming.
 
-## Free distribution and hosting
+> Review my previous submissions for Two Sum.
 
-The default design has **no central server bill**. Share the public GitHub marketplace or release ZIP. Each installation runs its own server and sends its own requests directly to LeetCode. Your LeetCode session is never shipped to other users. Standard GitHub-hosted Actions are [free for public repositories](https://docs.github.com/en/billing/concepts/product-billing/github-actions).
+> Run this Python solution on the examples, then explain the result.
 
-This is a desktop plugin, not a cloud/web account connector. Publishing a GitHub repository does not list it in the universal OpenAI plugin directory. That requires a separate submission and review; [local MCP public submissions currently require partner approval](https://developers.openai.com/plugins/deploy/desktop-only).
+Public profiles, problem statements, and the daily challenge work without login. Your solved list, submission history, and saved code use the connected account. Runs and submissions execute on LeetCode's judge.
 
-A hosted edition is future work. It would need an authenticated remote MCP endpoint, per-user credential isolation, encrypted storage or a different secure account connection, and rate limiting. Do not deploy this stdio server behind a public HTTP wrapper using a shared session. Cloudflare Workers has a [free tier](https://developers.cloudflare.com/workers/platform/pricing/), but server-side access to LeetCode must be tested before choosing a host. A free tier is not a guarantee of unlimited free service.
+## Tools
 
-## Develop
+| Tool | What it does |
+| --- | --- |
+| `auth_status` | Verify the connected account without returning cookies |
+| `get_profile` | Read a public profile and solved counts |
+| `get_problem` | Fetch a statement, hints, tags, and language templates |
+| `get_daily_challenge` | Get the current daily challenge |
+| `list_solved_problems` | Page through your solved problems |
+| `list_submissions` | Read your submission history, optionally for one problem |
+| `get_submission` | Retrieve saved source code and judge details |
+| `run_code` | Start a test run with example or custom input |
+| `submit_solution` | Submit code to the judge as the connected user |
+| `check_result` | Check a test run or submission by its judge ID |
+
+Runs and submissions return a `judgeId`. Check that ID for the result; a pending response doesn't mean the code passed. If a write times out, check your history before retrying. The server never automatically repeats a submission.
+
+Submitting sends code for evaluation. Publishing a community solution article isn't supported.
+
+## Development
 
 ```sh
 npm ci
@@ -90,14 +149,30 @@ npm run smoke
 npm run package
 ```
 
-`build` bundles the server/auth CLI into `plugins/leetcode`. `test` uses fixture responses, not live account writes. The smoke test starts the built server through a real stdio MCP client with an isolated empty credential store; it needs no account. `package` creates a ZIP whose root contains the plugin manifest. Commit the rebuilt bundle whenever source changes so Git marketplace installs work immediately.
+Source lives in `src/`. The distributable plugin lives in `plugins/leetcode/`, and the marketplace catalog is at `.agents/plugins/marketplace.json`. Run `npm run build` after changing source and commit the updated bundle so installs work straight from GitHub.
 
-Live account operations need separate verification with your own account. Offline tests do not establish that LeetCode's current authentication or judge endpoints work. No live submission is made by CI or the smoke test.
+The test suite covers authentication, pagination, submission handling, and MCP behavior using fixtures. The smoke test launches the standalone bundle from a fresh directory. CI runs on Windows and Linux with Node.js 22 and 24. Neither the tests nor CI submit code to a live account.
 
-## Privacy and security
+For a read-only check against the live site:
 
-See [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md). No telemetry or central credential collection. Requests go to `https://leetcode.com` only; redirects are rejected. The host assistant and its provider can process tool results such as profile data and submitted code. Host tool approvals still apply.
+```sh
+npm run smoke:live
+```
+
+This fetches Two Sum and the daily challenge without loading credentials. Authenticated history and judge operations need separate verification with your own session.
+
+## Project status
+
+**v0.1.0 is an early release for leetcode.com.** Public problem reads have been verified against the live site. LeetCode's website APIs can change, sessions expire, and some requests may require a browser check. The plugin respects those checks and premium access restrictions.
+
+Distribution is through this GitHub marketplace and the release ZIP. The plugin isn't listed in OpenAI's public directory.
+
+## Privacy
+
+The project operates no central server and collects no telemetry. Requests go to `https://leetcode.com`; redirects are rejected. Your agent client and model provider can process tool results, including account history and source code. Read the [privacy notes](PRIVACY.md) for the full data flow.
 
 ## License
 
-MIT. The standalone bundle includes third-party dependencies; their notices are in `plugins/leetcode/THIRD_PARTY_NOTICES.txt` after building.
+[MIT](LICENSE). Bundled dependencies retain their own licenses; see [third-party notices](https://github.com/Abhigyan2000/leetcode-plugin/blob/main/plugins/leetcode/THIRD_PARTY_NOTICES.txt).
+
+<sub>Independent community project. Not affiliated with LeetCode or OpenAI.</sub>
