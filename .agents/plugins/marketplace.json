@@ -1,0 +1,10 @@
+{
+  "name": "abhigyan-leetcode",
+  "interface": { "displayName": "Abhigyan's LeetCode Plugin" },
+  "plugins": [{
+    "name": "leetcode",
+    "source": { "source": "local", "path": "./plugins/leetcode" },
+    "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+    "category": "Developer Tools"
+  }]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "leetcode-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A desktop agent plugin for LeetCode progress, practice, and submissions.",
+  "license": "MIT",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test",
+    "check": "npm run build && npm test",
+    "start": "node plugins/leetcode/server/index.mjs",
+    "auth": "node plugins/leetcode/scripts/auth.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "smoke:live": "node scripts/live-smoke.mjs",
+    "package": "node scripts/package.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": { "esbuild": "0.28.1", "ajv": "8.20.0", "fflate": "0.8.3" }
+}

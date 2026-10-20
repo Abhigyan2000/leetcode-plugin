@@ -1,0 +1,9 @@
+node_modules/
+artifacts/
+.local/
+.env
+.env.*
+!.env.example
+credentials.json
+*.log
+coverage/

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "leetcode",
+  "version": "0.1.0",
+  "description": "Read your LeetCode progress and submissions, practice problems, run code, and submit solutions from your own account.",
+  "author": { "name": "Abhigyan2000", "url": "https://github.com/Abhigyan2000" },
+  "repository": "https://github.com/Abhigyan2000/leetcode-plugin",
+  "license": "MIT",
+  "keywords": ["leetcode", "dsa", "practice", "coding", "mcp"],
+  "extensions": {
+    "com.openai": {
+      "requires_local_executor": true,
+      "onboardingSkill": "./skills/setup/SKILL.md",
+      "interface": {
+        "displayName": "LeetCode Companion",
+        "shortDescription": "Practice LeetCode with your account and progress.",
+        "longDescription": "A community desktop plugin for personal LeetCode practice. Read solved problems and submission history, fetch problems and the daily challenge, run code, and submit solutions. Runs locally; each user connects their own account.",
+        "developerName": "Abhigyan2000",
+        "category": "Developer Tools",
+        "capabilities": ["Read", "Write"],
+        "defaultPrompt": ["Show my solved LeetCode problems.", "Help me practice today's challenge.", "Run my solution and explain the result."]
+      }
+    }
+  }
+}
