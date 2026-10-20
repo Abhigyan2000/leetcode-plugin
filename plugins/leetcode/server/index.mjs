@@ -26124,8 +26124,8 @@ function _overwrite(tx) {
   });
 }
 // @__NO_SIDE_EFFECTS__
-function _normalize(form) {
-  return /* @__PURE__ */ _overwrite((input2) => input2.normalize(form));
+function _normalize(form2) {
+  return /* @__PURE__ */ _overwrite((input2) => input2.normalize(form2));
 }
 // @__NO_SIDE_EFFECTS__
 function _trim() {
@@ -36729,7 +36729,7 @@ var LeetCodeClient = class {
     const headers = {
       Accept: "application/json",
       Referer: ORIGIN + referer,
-      "User-Agent": "LeetCodeCompanion/0.2.3 (community desktop plugin)"
+      "User-Agent": "LeetCodeCompanion/0.2.4 (community desktop plugin)"
     };
     if (body) headers["Content-Type"] = "application/json";
     if (credentials?.session) {
@@ -36826,15 +36826,15 @@ var LeetCodeClient = class {
         totalNum data { questionFrontendId title titleSlug difficulty status topicTags { name slug } }
       }
     }`, { skip: offset, limit, filters: { status: "AC", ...difficulty ? { difficulty } : {} } }, credentials);
-    const page = data.questionList;
-    if (!Array.isArray(page?.data) || !Number.isInteger(page.totalNum)) throw new LeetCodeError("INVALID_RESPONSE", "Unrecognized solved-problem response.");
-    const next = offset + page.data.length;
+    const page2 = data.questionList;
+    if (!Array.isArray(page2?.data) || !Number.isInteger(page2.totalNum)) throw new LeetCodeError("INVALID_RESPONSE", "Unrecognized solved-problem response.");
+    const next = offset + page2.data.length;
     return {
       username,
-      total: page.totalNum,
-      problems: page.data,
+      total: page2.totalNum,
+      problems: page2.data,
       offset,
-      nextOffset: page.data.length && next < page.totalNum ? next : null
+      nextOffset: page2.data.length && next < page2.totalNum ? next : null
     };
   }
   async submissions({ offset = 0, limit = 20, titleSlug, lastKey } = {}) {
@@ -37248,10 +37248,153 @@ async function launchSignInBrowser({
   };
 }
 
+// src/local-login.mjs
+import { createServer } from "node:http";
+import { randomBytes } from "node:crypto";
+import { execFile as execFile3 } from "node:child_process";
+import { promisify as promisify3 } from "node:util";
+import { win32 as win322 } from "node:path";
+var execute3 = promisify3(execFile3);
+var escape2 = (value) => String(value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
+async function openDefaultBrowser(url2, { env = process.env, platform = process.platform, run = execute3 } = {}) {
+  const options = { env, windowsHide: true, shell: false, timeout: 1e4 };
+  if (platform === "win32") {
+    const root = env[Object.keys(env).find((key) => key.toUpperCase() === "SYSTEMROOT")];
+    if (!root || !win322.isAbsolute(root)) throw new Error("Windows directory unavailable");
+    await run(
+      win322.join(root, "System32/WindowsPowerShell/v1.0/powershell.exe"),
+      ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "Start-Process -FilePath $env:LEETCODE_SETUP_URL"],
+      { ...options, env: { ...env, LEETCODE_SETUP_URL: url2 } }
+    );
+  } else if (platform === "darwin") await run("/usr/bin/open", [url2], options);
+  else if (platform === "linux") await run("xdg-open", [url2], options);
+  else throw new Error("Unsupported operating system");
+}
+function page(content, nonce) {
+  return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect LeetCode</title>
+<style nonce="${nonce}">*{box-sizing:border-box}body{margin:0;background:#f5f4ef;color:#20231f;font:16px/1.65 system-ui,sans-serif}main{max-width:720px;margin:7vh auto;padding:40px;background:#fff;border:1px solid #dddcd4;border-radius:18px}small{color:#666b60;letter-spacing:.08em;text-transform:uppercase}h1{font-size:32px;letter-spacing:-.04em;line-height:1.2}a{color:#335e46}li{margin:12px 0}label{display:block;margin-top:20px;font-weight:600}input{display:block;width:100%;padding:12px;margin-top:6px;border:1px solid #b9bdb4;border-radius:7px;font:inherit}button{margin-top:24px;padding:12px 22px;background:#244d39;color:white;border:0;border-radius:7px;font:inherit;cursor:pointer}code{font-size:.9em;background:#f1f2ee;padding:2px 5px;border-radius:4px}.note{color:#61665b;font-size:14px}.error{color:#a22626}@media(max-width:760px){main{margin:20px;padding:24px}}</style>
+<main><small>LeetCode Companion \xB7 Local setup</small>${content}</main></html>`;
+}
+function form(message = "") {
+  return `<h1>Connect your existing session</h1><p>Use the LeetCode account already signed in to your preferred browser profile.</p>
+<ol><li>Open <a href="https://leetcode.com/accounts/login/" target="_blank" rel="noreferrer noopener">LeetCode</a> in that profile and finish signing in.</li>
+<li>On LeetCode, open developer tools (F12, or your browser's menu). In Chrome, Brave, or Edge, choose <strong>Application \u2192 Cookies \u2192 https://leetcode.com</strong>. In Firefox, choose <strong>Storage \u2192 Cookies</strong>.</li>
+<li>Copy the <strong>Value</strong> of <code>LEETCODE_SESSION</code> and <code>csrftoken</code> into the fields below.</li></ol>
+${message ? `<p class="error" role="alert">${escape2(message)}</p>` : ""}
+<form method="post" autocomplete="off"><label for="session">LEETCODE_SESSION<input id="session" name="session" type="password" required maxlength="12000" autocomplete="off" spellcheck="false"></label>
+<label for="csrf">csrftoken<input id="csrf" name="csrf" type="password" required maxlength="2000" autocomplete="off" spellcheck="false"></label><button type="submit">Verify and connect</button></form>
+<p class="note">This form runs on your computer. Values are sent only to the local plugin and LeetCode for verification, then saved in your local credentials file. Never paste them into chat. Nothing is read automatically from your browser profile.</p>`;
+}
+async function launchLocalLogin({ submit, env = process.env, open: open2 = openDefaultBrowser } = {}) {
+  const path = `/setup/${randomBytes(32).toString("hex")}`;
+  const styleNonce = randomBytes(18).toString("base64");
+  let origin;
+  let busy = false;
+  let done = false;
+  let closed = false;
+  let finish;
+  const completed = new Promise((resolve2) => {
+    finish = resolve2;
+  });
+  const server = createServer(async (request, response) => {
+    response.setHeader("Cache-Control", "no-store");
+    response.setHeader("Referrer-Policy", "no-referrer");
+    response.setHeader("X-Content-Type-Options", "nosniff");
+    response.setHeader("X-Frame-Options", "DENY");
+    response.setHeader("Content-Security-Policy", `default-src 'none'; style-src 'nonce-${styleNonce}'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`);
+    const send = (status, content) => {
+      response.writeHead(status, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(page(content, styleNonce));
+    };
+    if (request.headers.host !== origin?.slice(7) || request.url !== path || closed) {
+      send(404, "<h1>Setup unavailable</h1>");
+      return;
+    }
+    if (done) {
+      send(410, "<h1>Setup complete</h1><p>Return to your agent client. You can close this tab.</p>");
+      return;
+    }
+    if (request.method === "GET") {
+      send(200, form());
+      return;
+    }
+    if (request.method !== "POST" || request.headers.origin !== origin || request.headers["sec-fetch-site"] && request.headers["sec-fetch-site"] !== "same-origin") {
+      send(403, "<h1>Request refused</h1>");
+      return;
+    }
+    if (request.headers["content-type"]?.split(";")[0] !== "application/x-www-form-urlencoded") {
+      send(415, "<h1>Unsupported form</h1>");
+      return;
+    }
+    if (busy) {
+      send(409, "<h1>Verification in progress</h1><p>Wait for the current request to finish.</p>");
+      return;
+    }
+    busy = true;
+    let body = "";
+    let credentials;
+    try {
+      let size = 0;
+      for await (const chunk of request) {
+        size += chunk.length;
+        if (size > 16e3) {
+          send(413, form("The submitted values are too long."));
+          return;
+        }
+        body += chunk.toString("utf8");
+      }
+      const fields = new URLSearchParams(body);
+      credentials = validateCredentials({ session: fields.get("session"), csrf: fields.get("csrf") });
+      if (!credentials.csrf) throw new Error("Both values are required");
+      if (closed) throw new Error("Setup closed");
+      const username = await submit(credentials);
+      done = true;
+      send(200, `<h1>Connected as ${escape2(username)}</h1><p>Your session is saved. Return to your agent client and continue with your next LeetCode request.</p><p class="note">You can close this tab.</p>`);
+      finish();
+    } catch {
+      send(400, form("The plugin could not verify and save this session. Copy both values from the same signed-in LeetCode profile and try again. If LeetCode still requires a browser check for API requests, this connection method may not work."));
+    } finally {
+      body = "";
+      credentials = void 0;
+      busy = false;
+    }
+  });
+  server.requestTimeout = 1e4;
+  server.headersTimeout = 1e4;
+  server.maxHeadersCount = 40;
+  server.maxConnections = 8;
+  server.setTimeout(1e4, (socket) => socket.destroy());
+  await new Promise((resolve2, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve2);
+  });
+  origin = `http://127.0.0.1:${server.address().port}`;
+  async function close() {
+    closed = true;
+    const force = setTimeout(() => server.closeAllConnections(), 1e3);
+    try {
+      await new Promise((resolve2) => {
+        server.close(resolve2);
+        server.closeIdleConnections();
+      });
+    } finally {
+      clearTimeout(force);
+    }
+  }
+  try {
+    await open2(`${origin}${path}`, { env });
+  } catch {
+    await close();
+    throw new Error("Could not open local setup in the default browser");
+  }
+  return { completed, close };
+}
+
 // src/login-manager.mjs
 var LoginManager = class {
   constructor({
     launch = launchSignInBrowser,
+    launchLocal = launchLocalLogin,
     save = saveCredentials,
     remove = removeCredentials,
     verify = (credentials) => new LeetCodeClient({ credentials: async () => credentials }).authStatus(),
@@ -37260,6 +37403,7 @@ var LoginManager = class {
     pollMs = 1500
   } = {}) {
     this.launch = launch;
+    this.launchLocal = launchLocal;
     this.save = save;
     this.remove = remove;
     this.verify = verify;
@@ -37273,11 +37417,14 @@ var LoginManager = class {
   status() {
     return { ...this.state };
   }
-  async start() {
+  async start(method = "browser") {
     if (this.env.LEETCODE_SESSION) throw new LeetCodeError("ENVIRONMENT_ACCOUNT", "An environment-configured account takes precedence. Unset LEETCODE_SESSION and LEETCODE_CSRFTOKEN before connecting a different account in the browser.");
     if (this.starting) return this.starting;
-    if (this.state.state === "AWAITING_LOGIN") return this.status();
-    this.starting = this.open();
+    if (this.state.state === "AWAITING_LOGIN") {
+      if ((this.state.method || "browser") === method) return this.status();
+      await this.cancel();
+    }
+    this.starting = method === "local" ? this.openLocal() : this.open();
     try {
       return await this.starting;
     } finally {
@@ -37290,6 +37437,7 @@ var LoginManager = class {
     const browser = await this.launch({ env: this.env, signal: this.controller.signal });
     this.state = {
       state: "AWAITING_LOGIN",
+      method: "browser",
       browser: browser.browser,
       profile: "temporary",
       message: "Sign in in the browser window. The plugin verifies and saves your session in the background, then closes the window. No progress checks are needed.",
@@ -37297,6 +37445,45 @@ var LoginManager = class {
     };
     this.task = this.observe(browser, this.controller.signal);
     return this.status();
+  }
+  async openLocal() {
+    if (this.task) await this.task;
+    this.controller = new AbortController();
+    const signal = this.controller.signal;
+    const local = await this.launchLocal({ env: this.env, submit: async (credentials) => {
+      signal.throwIfAborted();
+      const verified = await this.verify(credentials);
+      signal.throwIfAborted();
+      if (!verified.connected || !verified.username) throw new Error("Session not verified");
+      await this.save(credentials, this.env);
+      this.state = { state: "CONNECTED", username: verified.username, message: "Account connected. You can close the setup tab." };
+      return verified.username;
+    } });
+    this.state = {
+      state: "AWAITING_LOGIN",
+      method: "local",
+      profile: "normal",
+      message: "A local setup page opened in your default browser. Sign in to LeetCode normally and paste the two cookie values into that page, never into chat. The page verifies and saves the session. No polling is needed.",
+      expiresAt: new Date(Date.now() + this.timeoutMs).toISOString()
+    };
+    this.task = this.observeLocal(local, signal);
+    return this.status();
+  }
+  async observeLocal(local, signal) {
+    const timer = new AbortController();
+    try {
+      const timeout = delay2(this.timeoutMs, void 0, { signal: AbortSignal.any([signal, timer.signal]) }).then(() => {
+        throw new Error("Setup expired");
+      });
+      await Promise.race([local.completed, timeout]);
+    } catch {
+      const cancelled = signal.aborted;
+      this.controller.abort();
+      this.state = cancelled ? { state: "CANCELLED", message: "Sign-in cancelled." } : { state: "EXPIRED", message: "Local setup expired. Use connect_account with method local to try again." };
+    } finally {
+      timer.abort();
+      await local.close();
+    }
   }
   async observe(browser, signal) {
     const deadline = Date.now() + this.timeoutMs;
@@ -37350,8 +37537,8 @@ var LoginManager = class {
 };
 
 // src/server.mjs
-var VERSION = "0.2.3";
-function createServer(client = new LeetCodeClient(), login = new LoginManager()) {
+var VERSION = "0.2.4";
+function createServer2(client = new LeetCodeClient(), login = new LoginManager()) {
   const server = new McpServer({ name: "leetcode-companion", version: VERSION });
   server.server.onclose = () => {
     void login.cancel();
@@ -37384,9 +37571,9 @@ function createServer(client = new LeetCodeClient(), login = new LoginManager())
     if (pending.state === "AWAITING_LOGIN") return accountResult({ connected: false, login: pending });
     return accountResult({ ...await client.authStatus(), login: login.status() });
   });
-  tool("connect_account", "Connect in one call: return the verified account, reuse a pending sign-in, or open LeetCode in the default supported browser with a temporary profile. Do not call auth_status first. The plugin verifies and saves sign-in in the background; no agent polling needed.", {}, async () => {
+  tool("connect_account", "Connect once; no auth_status prerequisite or progress polling. Default browser method uses a temporary sign-in profile. If verification fails there but works in the normal browser, use method local: opens a local form for the user to paste session values privately. Never put cookies in tool arguments or chat.", { method: external_exports.enum(["browser", "local"]).default("browser") }, async ({ method }) => {
     const pending = login.status();
-    if (pending.state === "AWAITING_LOGIN") return accountResult(pending);
+    if (pending.state === "AWAITING_LOGIN" && (pending.method || "browser") === method) return accountResult(pending);
     let current;
     try {
       current = await client.authStatus();
@@ -37394,7 +37581,7 @@ function createServer(client = new LeetCodeClient(), login = new LoginManager())
       if (!(error62 instanceof LeetCodeError) || !["ACCESS_DENIED", "SESSION_EXPIRED"].includes(error62.code)) throw error62;
     }
     if (current?.connected) return accountResult({ state: "CONNECTED", connected: true, username: current.username, canSubmit: current.canSubmit });
-    return accountResult(await login.start());
+    return accountResult(await login.start(method));
   }, true);
   tool("cancel_login", "Close a pending browser sign-in window and remove its temporary profile. Does not remove previously saved credentials.", {}, () => login.cancel(), true);
   tool("disconnect_account", "Cancel pending browser sign-in and remove this plugin's saved local LeetCode credentials. Does not revoke browser sessions or unset environment overrides.", {}, () => login.disconnect(), true);
@@ -37410,7 +37597,7 @@ function createServer(client = new LeetCodeClient(), login = new LoginManager())
   return server;
 }
 async function main() {
-  const server = createServer();
+  const server = createServer2();
   const stop = async () => {
     await server.close();
   };

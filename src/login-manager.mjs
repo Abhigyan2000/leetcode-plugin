@@ -2,12 +2,14 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { launchSignInBrowser, credentialsFromCookies } from './browser-login.mjs';
 import { LeetCodeClient, LeetCodeError } from './client.mjs';
 import { saveCredentials, removeCredentials } from './credentials.mjs';
+import { launchLocalLogin } from './local-login.mjs';
 
 export class LoginManager {
-  constructor({ launch = launchSignInBrowser, save = saveCredentials, remove = removeCredentials,
+  constructor({ launch = launchSignInBrowser, launchLocal = launchLocalLogin, save = saveCredentials, remove = removeCredentials,
     verify = credentials => new LeetCodeClient({ credentials: async () => credentials }).authStatus(),
     env = process.env, timeoutMs = 300000, pollMs = 1500 } = {}) {
     this.launch = launch;
+    this.launchLocal = launchLocal;
     this.save = save;
     this.remove = remove;
     this.verify = verify;
@@ -21,11 +23,14 @@ export class LoginManager {
 
   status() { return { ...this.state }; }
 
-  async start() {
+  async start(method = 'browser') {
     if (this.env.LEETCODE_SESSION) throw new LeetCodeError('ENVIRONMENT_ACCOUNT', 'An environment-configured account takes precedence. Unset LEETCODE_SESSION and LEETCODE_CSRFTOKEN before connecting a different account in the browser.');
     if (this.starting) return this.starting;
-    if (this.state.state === 'AWAITING_LOGIN') return this.status();
-    this.starting = this.open();
+    if (this.state.state === 'AWAITING_LOGIN') {
+      if ((this.state.method || 'browser') === method) return this.status();
+      await this.cancel();
+    }
+    this.starting = method === 'local' ? this.openLocal() : this.open();
     try { return await this.starting; } finally { this.starting = null; }
   }
 
@@ -33,11 +38,49 @@ export class LoginManager {
     if (this.task) await this.task;
     this.controller = new AbortController();
     const browser = await this.launch({ env: this.env, signal: this.controller.signal });
-    this.state = { state: 'AWAITING_LOGIN', browser: browser.browser, profile: 'temporary',
+    this.state = { state: 'AWAITING_LOGIN', method: 'browser', browser: browser.browser, profile: 'temporary',
       message: 'Sign in in the browser window. The plugin verifies and saves your session in the background, then closes the window. No progress checks are needed.',
       expiresAt: new Date(Date.now() + this.timeoutMs).toISOString() };
     this.task = this.observe(browser, this.controller.signal);
     return this.status();
+  }
+
+  async openLocal() {
+    if (this.task) await this.task;
+    this.controller = new AbortController();
+    const signal = this.controller.signal;
+    const local = await this.launchLocal({ env: this.env, submit: async credentials => {
+      signal.throwIfAborted();
+      const verified = await this.verify(credentials);
+      signal.throwIfAborted();
+      if (!verified.connected || !verified.username) throw new Error('Session not verified');
+      await this.save(credentials, this.env);
+      this.state = { state: 'CONNECTED', username: verified.username, message: 'Account connected. You can close the setup tab.' };
+      return verified.username;
+    } });
+    this.state = { state: 'AWAITING_LOGIN', method: 'local', profile: 'normal',
+      message: 'A local setup page opened in your default browser. Sign in to LeetCode normally and paste the two cookie values into that page, never into chat. The page verifies and saves the session. No polling is needed.',
+      expiresAt: new Date(Date.now() + this.timeoutMs).toISOString() };
+    this.task = this.observeLocal(local, signal);
+    return this.status();
+  }
+
+  async observeLocal(local, signal) {
+    const timer = new AbortController();
+    try {
+      const timeout = delay(this.timeoutMs, undefined, { signal: AbortSignal.any([signal, timer.signal]) })
+        .then(() => { throw new Error('Setup expired'); });
+      await Promise.race([local.completed, timeout]);
+    } catch {
+      const cancelled = signal.aborted;
+      this.controller.abort();
+      this.state = cancelled
+        ? { state: 'CANCELLED', message: 'Sign-in cancelled.' }
+        : { state: 'EXPIRED', message: 'Local setup expired. Use connect_account with method local to try again.' };
+    } finally {
+      timer.abort();
+      await local.close();
+    }
   }
 
   async observe(browser, signal) {

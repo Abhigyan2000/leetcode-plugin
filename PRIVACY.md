@@ -10,6 +10,8 @@ The browser's local debugging connection exists only for this temporary sign-in 
 
 Verified session cookies are saved in a plaintext file in your user application-data directory, outside the repository. Manual local login and environment-variable configuration remain available. The server does not return cookies in its tool results or include upstream response bodies in error messages. Disconnecting removes the saved local file, not regular browser sessions or separately configured environment variables.
 
+Optional local setup opens a form through the operating system's default URL handler, without browser automation or profile access. You copy the session and CSRF cookie values from your signed-in browser into that page. They travel only to a temporary listener on `127.0.0.1` and to LeetCode for verification, then are saved in the same local file. The page loads no remote assets or scripts. The listener closes on successful setup, cancellation, or timeout. The plugin does not scan or automatically read your normal browser profile. The setup page is not LeetCode's login page; enter your LeetCode password only on leetcode.com.
+
 Your agent client and model provider receive the tool output needed for a task, including profile information, progress, submission history, and saved source code. Their policies and your client data controls also apply.
 
 GitHub handles repository downloads and optional update checks under its own policies. Node.js and the client application are separate requirements. For development only, npm downloads build/test dependencies. The installed bundled server does not install dependencies at startup.
